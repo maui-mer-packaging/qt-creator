@@ -24,13 +24,19 @@ PkgConfigBR:
     - Qt5Core
     - Qt5Gui
     - Qt5DBus
+    - Qt5Xml
+    - Qt5Concurrent
     - Qt5Qml
     - Qt5Quick
+    - Qt5QuickWidgets
     - Qt5Test
     - Qt5Script
     - Qt5WebKit
     - Qt5X11Extras
     - Qt5XmlPatterns
+    - Qt5PrintSupport
+    - Qt5Help
+    - Qt5Designer
 Requires:
     - xdg-utils
     - qt5-qtbase-devel
