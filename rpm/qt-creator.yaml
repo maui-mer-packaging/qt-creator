@@ -1,0 +1,66 @@
+Name        : qt-creator
+Version     : 3.1.2
+Release     : 1
+Group       : Development/Tools
+License     : LGPLv2 with exceptions
+Summary     : Cross-platform IDE for Qt
+Description : |
+  Qt Creator is a cross-platform IDE (integrated development environment)
+  tailored to the needs of Qt developers.
+URL         : http://qt.digia.com/Product/Qt-Core-Features-Functions/Developer-Tools/
+Sources     :
+    - "%{name}-%{version}.tar.xz"
+SetupOptions: -q -n %{name}-%{version}
+
+# See #1074700
+#ExcludeArch: "%{arm}"
+
+RpmLintIgnore:
+    - files-duplicate
+
+PkgBR:
+    - diffutils
+PkgConfigBR:
+    - Qt5Core
+    - Qt5Gui
+    - Qt5DBus
+    - Qt5Qml
+    - Qt5Quick
+    - Qt5Test
+    - Qt5Script
+    - Qt5WebKit
+    - Qt5X11Extras
+    - Qt5XmlPatterns
+Requires:
+    - xdg-utils
+    - qt5-qtbase-devel
+    - gcc-c++
+
+Configure: none
+Builder: none
+
+Files:
+    - "%doc README LICENSE.LGPL LGPL_EXCEPTION.TXT"
+    - "%exclude %{_defaultdocdir}/%{name}/qtcreator.qch"
+    - "%{_bindir}/qbs*"
+    - "%{_bindir}/buildoutputparser"
+    - "%{_bindir}/qml2puppet"
+    - "%{_bindir}/qtpromaker"
+    - "%{_bindir}/qtcreator"
+    - "%{_bindir}/qtcreator_process_stub"
+    - "%{_bindir}/sdktool"
+    - "%{_libdir}/qtcreator"
+    #- "%%{_libdir}/qmldesigner"
+    #- "%{_datadir}/qtcreator"
+    - "%{_datadir}/applications/qtcreator.desktop"
+    - "%{_datadir}/icons/hicolor/*/apps/QtProject-qtcreator.png"
+
+SubPackages:
+    - Name: doc
+      BuildArch: noarch
+      Summary: User documentation for %{name}
+      Group: Documentation
+      Description: |
+        User documentation for %{name}.
+      Files:
+         - "%doc %{_defaultdocdir}/%{name}/qtcreator.qch"
