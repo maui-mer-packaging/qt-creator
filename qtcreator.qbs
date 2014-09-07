@@ -20,7 +20,7 @@ Project {
     property string libDirName: "lib"
     property string ide_library_path: {
         if (qbs.targetOS.contains("osx"))
-            return ide_app_target + ".app/Contents/PlugIns"
+            return ide_app_target + ".app/Contents/Frameworks"
         else if (qbs.targetOS.contains("windows"))
             return ide_app_path
         else
@@ -28,7 +28,7 @@ Project {
     }
     property string ide_plugin_path: {
         if (qbs.targetOS.contains("osx"))
-            return ide_library_path
+            return ide_app_target + ".app/Contents/PlugIns"
         else if (qbs.targetOS.contains("windows"))
             return libDirName + "/qtcreator/plugins"
         else
@@ -50,7 +50,6 @@ Project {
     property stringList generalDefines: [
         "QT_CREATOR",
         'IDE_LIBRARY_BASENAME="' + libDirName + '"',
-        "QT_DISABLE_DEPRECATED_BEFORE=0x040900",
         "QT_NO_CAST_TO_ASCII",
         "QT_NO_CAST_FROM_ASCII"
     ].concat(testsEnabled ? ["WITH_TESTS"] : [])

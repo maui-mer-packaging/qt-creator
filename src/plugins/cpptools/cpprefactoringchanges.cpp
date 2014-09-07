@@ -32,6 +32,8 @@
 #include "cppqtstyleindenter.h"
 #include "cppcodeformatter.h"
 #include "cppmodelmanager.h"
+#include "cppworkingcopy.h"
+
 #include <projectexplorer/editorconfiguration.h>
 
 #include <utils/qtcassert.h>
@@ -72,12 +74,12 @@ public:
 
     virtual void fileChanged(const QString &fileName)
     {
-        m_modelManager->updateSourceFiles(QStringList(fileName));
+        m_modelManager->updateSourceFiles(QSet<QString>() << fileName);
     }
 
     Snapshot m_snapshot;
     CppModelManagerInterface *m_modelManager;
-    CppModelManagerInterface::WorkingCopy m_workingCopy;
+    WorkingCopy m_workingCopy;
 
 };
 
@@ -111,10 +113,6 @@ CppRefactoringFileConstPtr CppRefactoringChanges::fileNoEditor(const QString &fi
         document = new QTextDocument(QString::fromUtf8(data()->m_workingCopy.source(fileName)));
     CppRefactoringFilePtr result(new CppRefactoringFile(document, fileName));
     result->m_data = m_data;
-
-    Document::Ptr cppDocument = data()->m_snapshot.document(fileName);
-    if (cppDocument)
-        result->setCppDocument(cppDocument);
 
     return result;
 }

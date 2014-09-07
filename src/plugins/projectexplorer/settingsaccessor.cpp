@@ -56,7 +56,7 @@ static QString generateSuffix(const QString &alt1, const QString &alt2)
     if (suffix.isEmpty())
         suffix = alt2;
     suffix.replace(QRegExp(QLatin1String("[^a-zA-Z0-9_.-]")), QString(QLatin1Char('_'))); // replace fishy characters:
-    if (!suffix.startsWith(QLatin1String(".")))
+    if (!suffix.startsWith(QLatin1Char('.')))
         suffix.prepend(QLatin1Char('.'));
     return suffix;
 }
@@ -352,6 +352,20 @@ private:
                             NamePolicy policy);
 };
 
+// Version 17 Apply user sticky keys per map
+class UserFileVersion17Upgrader : public VersionUpgrader
+{
+public:
+    int version() const { return 17; }
+    QString backupExtension() const { return QLatin1String("3.3-pre2"); }
+    QVariantMap upgrade(const QVariantMap &map);
+
+    QVariant process(const QVariant &entry);
+
+private:
+    QVariantList m_sticky;
+};
+
 } // namespace
 
 //
@@ -435,6 +449,7 @@ UserFileAccessor::UserFileAccessor(Project *project)
     addVersionUpgrader(new UserFileVersion14Upgrader);
     addVersionUpgrader(new UserFileVersion15Upgrader);
     addVersionUpgrader(new UserFileVersion16Upgrader);
+    addVersionUpgrader(new UserFileVersion17Upgrader);
 }
 
 QVariantMap UserFileAccessor::prepareSettings(const QVariantMap &data) const
@@ -561,16 +576,14 @@ public:
 class MergeSettingsOperation : public Operation
 {
 public:
-    MergeSettingsOperation(const QSet<QString> &sticky) : m_userSticky(sticky) { }
-
     void apply(QVariantMap &userMap, const QString &key, const QVariant &sharedValue)
     {
-        if (!m_userSticky.contains(key))
+        // Do not override bookkeeping settings:
+        if (key == QLatin1String(ORIGINAL_VERSION_KEY) || key == QLatin1String(VERSION_KEY))
+            return;
+        if (!userMap.value(QLatin1String(USER_STICKY_KEYS_KEY)).toList().contains(key))
             userMap.insert(key, sharedValue);
     }
-
-private:
-    QSet<QString> m_userSticky;
 };
 
 
@@ -579,14 +592,11 @@ class TrackStickyness : public Operation
 public:
     void apply(QVariantMap &userMap, const QString &key, const QVariant &)
     {
-        Q_UNUSED(userMap);
-        m_userSticky.insert(key);
+        const QString stickyKey = QLatin1String(USER_STICKY_KEYS_KEY);
+        QVariantList sticky = userMap.value(stickyKey).toList();
+        sticky.append(key);
+        userMap.insert(stickyKey, sticky);
     }
-
-    QStringList stickySettings() const { return m_userSticky.toList(); }
-
-private:
-    QSet<QString> m_userSticky;
 };
 
 } // namespace
@@ -665,7 +675,7 @@ bool SettingsAccessor::isBetterMatch(const QVariantMap &origData, const QVariant
  *
  * Returns settings of the requested version.
  */
-QVariantMap SettingsAccessor::upgradeSettings(const QVariantMap &data, int toVersion) const
+QVariantMap SettingsAccessor::upgradeSettings(const QVariantMap &data) const
 {
     const int version = versionFromMap(data);
 
@@ -678,9 +688,8 @@ QVariantMap SettingsAccessor::upgradeSettings(const QVariantMap &data, int toVer
     else
         result = data;
 
-    if (version >= toVersion
-            || version < d->firstVersion()
-            || toVersion > d->currentVersion())
+    const int toVersion = currentVersion();
+    if (version >= toVersion || version < d->firstVersion())
         return result;
 
     for (int i = version; i < toVersion; ++i) {
@@ -808,22 +817,7 @@ QVariantMap mergeSharedSettings(const QVariantMap &userMap, const QVariantMap &s
     if (userMap.isEmpty())
         return sharedMap;
 
-    QSet<QString> stickyKeys;
-    const QVariant stickyList = result.take(QLatin1String(USER_STICKY_KEYS_KEY)).toList();
-    if (stickyList.isValid()) {
-        if (stickyList.type() != QVariant::List) {
-            // File is messed up... The user probably changed something.
-            return result;
-        }
-        foreach (const QVariant &v, stickyList.toList())
-            stickyKeys.insert(v.toString());
-    }
-
-    // Do not override bookkeeping settings:
-    stickyKeys.insert(QLatin1String(ORIGINAL_VERSION_KEY));
-    stickyKeys.insert(QLatin1String(VERSION_KEY));
-
-    MergeSettingsOperation op(stickyKeys);
+    MergeSettingsOperation op;
     op.synchronize(result, sharedMap);
     return result;
 }
@@ -843,8 +837,6 @@ void trackUserStickySettings(QVariantMap &userMap, const QVariantMap &sharedMap)
 
     TrackStickyness op;
     op.synchronize(userMap, sharedMap);
-
-    userMap.insert(QLatin1String(USER_STICKY_KEYS_KEY), QVariant(op.stickySettings()));
 }
 
 } // Anonymous
@@ -919,7 +911,7 @@ QList<FileName> SettingsAccessor::settingsFiles(const QString &suffix) const
     const Utils::FileName baseName = project()->projectFilePath();
     QFileInfo fi = baseName.toFileInfo();
     QDir dir = QDir(fi.absolutePath());
-    QString filter = fi.fileName() + suffix + QLatin1String("*");
+    QString filter = fi.fileName() + suffix + QLatin1Char('*');
 
     QFileInfoList list = dir.entryInfoList(QStringList() << filter, QDir::Files);
 
@@ -956,6 +948,23 @@ int SettingsAccessor::firstSupportedVersion() const
     return d->firstVersion();
 }
 
+Utils::FileName SettingsAccessor::backupName(const QVariantMap &data) const
+{
+    QString backupName = defaultFileName(m_userSuffix);
+    const QByteArray oldEnvironmentId = environmentIdFromMap(data);
+    if (!oldEnvironmentId.isEmpty() && oldEnvironmentId != creatorId())
+        backupName += QLatin1Char('.') + QString::fromLatin1(oldEnvironmentId).mid(1, 7);
+    const int oldVersion = versionFromMap(data);
+    if (oldVersion != currentVersion()) {
+        VersionUpgrader *upgrader = d->upgrader(oldVersion);
+        if (upgrader)
+            backupName += QLatin1Char('.') + upgrader->backupExtension();
+        else
+            backupName += QLatin1Char('.') + QString::number(oldVersion);
+    }
+    return Utils::FileName::fromString(backupName);
+}
+
 void SettingsAccessor::backupUserFile() const
 {
     SettingsAccessorPrivate::Settings oldSettings;
@@ -966,20 +975,9 @@ void SettingsAccessor::backupUserFile() const
 
     // Do we need to do a backup?
     const QString origName = oldSettings.path.toString();
-    QString backupName = origName;
-    const QByteArray oldEnvironmentId = environmentIdFromMap(oldSettings.map);
-    if (!oldEnvironmentId.isEmpty() && oldEnvironmentId != creatorId())
-        backupName += QLatin1String(".") + QString::fromLatin1(oldEnvironmentId).mid(1, 7);
-    const int oldVersion = versionFromMap(oldSettings.map);
-    if (oldVersion != currentVersion()) {
-        VersionUpgrader *upgrader = d->upgrader(oldVersion);
-        if (upgrader)
-            backupName += QLatin1String(".") + upgrader->backupExtension();
-        else
-            backupName += QLatin1String(".") + QString::number(oldVersion);
-    }
-    if (backupName != origName)
-        QFile::copy(origName, backupName);
+    QString backupFileName = backupName(oldSettings.map).toString();
+    if (backupFileName != origName)
+        QFile::copy(origName, backupFileName);
 }
 
 QVariantMap SettingsAccessor::readUserSettings(QWidget *parent) const
@@ -1060,8 +1058,8 @@ QVariantMap SettingsAccessor::mergeSettings(const QVariantMap &userMap,
     QVariantMap newShared = sharedMap;
     QVariantMap result;
     if (!newUser.isEmpty() && !newShared.isEmpty()) {
-        newUser = upgradeSettings(newUser, versionFromMap(newShared));
-        newShared = upgradeSettings(newShared, versionFromMap(newUser));
+        newUser = upgradeSettings(newUser);
+        newShared = upgradeSettings(newShared);
         result = mergeSharedSettings(newUser, newShared);
     } else if (!sharedMap.isEmpty()) {
         result = sharedMap;
@@ -1072,7 +1070,7 @@ QVariantMap SettingsAccessor::mergeSettings(const QVariantMap &userMap,
     m_project->setProperty(SHARED_SETTINGS, newShared);
 
     // Update from the base version to Creator's version.
-    return upgradeSettings(result, currentVersion());
+    return upgradeSettings(result);
 }
 
 // -------------------------------------------------------------------------
@@ -2650,4 +2648,35 @@ QVariantMap UserFileVersion16Upgrader::upgrade(const QVariantMap &data)
     }
 
     return result;
+}
+
+QVariantMap UserFileVersion17Upgrader::upgrade(const QVariantMap &map)
+{
+    m_sticky = map.value(QLatin1String(USER_STICKY_KEYS_KEY)).toList();
+    if (m_sticky.isEmpty())
+        return map;
+    return process(map).toMap();
+}
+
+QVariant UserFileVersion17Upgrader::process(const QVariant &entry)
+{
+    switch (entry.type()) {
+    case QVariant::List: {
+        QVariantList result;
+        foreach (const QVariant &item, entry.toList())
+            result.append(process(item));
+        return result;
+    }
+    case QVariant::Map: {
+        QVariantMap result = entry.toMap();
+        for (QVariantMap::iterator i = result.begin(), end = result.end(); i != end; ++i) {
+            QVariant &v = i.value();
+            v = process(v);
+        }
+        result.insert(QLatin1String(USER_STICKY_KEYS_KEY), m_sticky);
+        return result;
+    }
+    default:
+        return entry;
+    }
 }

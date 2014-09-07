@@ -38,11 +38,14 @@
 #include <coreplugin/idocument.h>
 #include <projectexplorer/kitmanager.h>
 #include <projectexplorer/target.h>
+#include <projectexplorer/toolchain.h>
+#include <projectexplorer/toolchainmanager.h>
 #include <qtsupport/qtkitinformation.h>
 #include <qtsupport/qtsupportconstants.h>
 #include <qtsupport/qtversionfactory.h>
 #include <qtsupport/qtversionmanager.h>
 #include <utils/qtcprocess.h>
+#include <utils/algorithm.h>
 
 #include <QDir>
 #include <QFileInfo>
@@ -93,16 +96,22 @@ QList<ProjectExplorer::BuildInfo *> QmakeProjectImporter::import(const Utils::Fi
             }
         }
 
-        // Create a new version if not found:
-        if (!version) {
+        if (version) {
+            // Check if version is a temporary qt
+            int qtId = version->uniqueId();
+            temporaryVersion = Utils::anyOf(ProjectExplorer::KitManager::kits(), [&qtId](ProjectExplorer::Kit *k){
+                return k->value(QT_IS_TEMPORARY, -1).toInt() == qtId;
+            });
+        } else {
+            // Create a new version if not found:
             // Do not use the canonical path here...
             version = QtSupport::QtVersionFactory::createQtVersionFromQMakePath(qmakeBinary);
             if (!version)
                 continue;
 
-            setIsUpdating(true);
+            bool oldIsUpdating = setIsUpdating(true);
             QtSupport::QtVersionManager::addVersion(version);
-            setIsUpdating(false);
+            setIsUpdating(oldIsUpdating);
             temporaryVersion = true;
         }
 
@@ -113,6 +122,9 @@ QList<ProjectExplorer::BuildInfo *> QmakeProjectImporter::import(const Utils::Fi
         QString additionalArguments = makefileBuildConfig.second;
         Utils::FileName parsedSpec =
                 QmakeBuildConfiguration::extractSpecFromArguments(&additionalArguments, importPath.toString(), version);
+        QStringList deducedArguments =
+                QmakeBuildConfiguration::extractDeducedArguments(&additionalArguments);
+
         Utils::FileName versionSpec = version->mkspec();
         if (parsedSpec.isEmpty() || parsedSpec == Utils::FileName::fromLatin1("default"))
             parsedSpec = versionSpec;
@@ -131,13 +143,17 @@ QList<ProjectExplorer::BuildInfo *> QmakeProjectImporter::import(const Utils::Fi
             ProjectExplorer::ToolChain *tc = ProjectExplorer::ToolChainKitInformation::toolChain(k);
             if (kitSpec.isEmpty() && kitVersion)
                 kitSpec = kitVersion->mkspecFor(tc);
+            QStringList kitDeducedArguments;
+            if (tc)
+                kitDeducedArguments = QmakeBuildConfiguration::deduceArgumnetsForTargetAbi(tc->targetAbi(), kitVersion);
 
             if (kitVersion == version
-                    && kitSpec == parsedSpec)
+                    && kitSpec == parsedSpec
+                    && kitDeducedArguments == deducedArguments)
                 kitList.append(k);
         }
         if (kitList.isEmpty())
-            kitList.append(createTemporaryKit(version, temporaryVersion, parsedSpec));
+            kitList.append(createTemporaryKit(version, temporaryVersion, parsedSpec, deducedArguments));
 
         foreach (ProjectExplorer::Kit *k, kitList) {
             addProject(k);
@@ -236,53 +252,89 @@ ProjectExplorer::Target *QmakeProjectImporter::preferredTarget(const QList<Proje
 void QmakeProjectImporter::cleanupKit(ProjectExplorer::Kit *k)
 {
     QtSupport::BaseQtVersion *version = QtSupport::QtVersionManager::version(k->value(QT_IS_TEMPORARY, -1).toInt());
-    if (version)
+    if (!version)
+        return;
+
+    // count how many kits are using this version
+    int qtId = version->uniqueId();
+    int count = Utils::count(ProjectExplorer::KitManager::kits(), [qtId](ProjectExplorer::Kit *k) {
+        return k->value(QT_IS_TEMPORARY, -1).toInt() == qtId;
+    });
+
+    if (count == 0) // Remove if no other kit is using it. (The Kit k is not in KitManager::kits()
         QtSupport::QtVersionManager::removeVersion(version);
 }
 
 void QmakeProjectImporter::makePermanent(ProjectExplorer::Kit *k)
 {
+    if (!isTemporaryKit(k))
+        return;
+    setIsUpdating(true);
     int tempId = k->value(QT_IS_TEMPORARY, -1).toInt();
     int qtId = QtSupport::QtKitInformation::qtVersionId(k);
     if (tempId != qtId) {
         QtSupport::BaseQtVersion *version = QtSupport::QtVersionManager::version(tempId);
-        if (version)
+        int count = Utils::count(ProjectExplorer::KitManager::kits(), [tempId](ProjectExplorer::Kit *k) {
+            return k->value(QT_IS_TEMPORARY, -1).toInt() == tempId;
+        });
+        if (count == 0)
             QtSupport::QtVersionManager::removeVersion(version);
     }
 
-    k->removeKey(QT_IS_TEMPORARY);
+    foreach (ProjectExplorer::Kit *kit, ProjectExplorer::KitManager::kits())
+        if (kit->value(QT_IS_TEMPORARY, -1).toInt() == tempId)
+            kit->removeKeySilently(QT_IS_TEMPORARY);
+    setIsUpdating(false);
     ProjectImporter::makePermanent(k);
+}
+
+namespace {
+ProjectExplorer::ToolChain *preferredToolChain(QtSupport::BaseQtVersion *qtVersion, const Utils::FileName &ms, const QStringList &deducedArguments)
+{
+    const Utils::FileName spec = ms.isEmpty() ? qtVersion->mkspec() : ms;
+
+    QList<ProjectExplorer::ToolChain *> toolchains = ProjectExplorer::ToolChainManager::toolChains();
+    QList<ProjectExplorer::Abi> qtAbis = qtVersion->qtAbis();
+    return Utils::findOr(toolchains,
+                         toolchains.isEmpty() ? 0 : toolchains.first(),
+                         [&spec, &deducedArguments, &qtAbis](ProjectExplorer::ToolChain *tc) -> bool{
+                                return qtAbis.contains(tc->targetAbi())
+                                        && tc->suggestedMkspecList().contains(spec)
+                                        && QmakeBuildConfiguration::deduceArgumnetsForTargetAbi(tc->targetAbi(), 0) == deducedArguments;
+                          });
+}
 }
 
 ProjectExplorer::Kit *QmakeProjectImporter::createTemporaryKit(QtSupport::BaseQtVersion *version,
                                                                bool temporaryVersion,
-                                                               const Utils::FileName &parsedSpec)
+                                                               const Utils::FileName &parsedSpec,
+                                                               const QStringList &deducedQmakeArguments)
 {
     ProjectExplorer::Kit *k = new ProjectExplorer::Kit;
+    bool oldIsUpdating = setIsUpdating(true);
+    {
+        ProjectExplorer::KitGuard guard(k);
 
-    ProjectExplorer::KitGuard guard(k);
+        QtSupport::QtKitInformation::setQtVersion(k, version);
+        ProjectExplorer::ToolChainKitInformation::setToolChain(k, preferredToolChain(version, parsedSpec, deducedQmakeArguments));
+        QmakeKitInformation::setMkspec(k, parsedSpec);
 
-    QtSupport::QtKitInformation::setQtVersion(k, version);
-    ProjectExplorer::ToolChainKitInformation::setToolChain(k, version->preferredToolChain(parsedSpec));
-    QmakeKitInformation::setMkspec(k, parsedSpec);
+        markTemporary(k);
+        if (temporaryVersion)
+            k->setValue(QT_IS_TEMPORARY, version->uniqueId());
 
-    markTemporary(k);
-    if (temporaryVersion)
-        k->setValue(QT_IS_TEMPORARY, version->uniqueId());
+        // Set up other values:
+        foreach (ProjectExplorer::KitInformation *ki, ProjectExplorer::KitManager::kitInformation()) {
+            if (ki->id() == ProjectExplorer::ToolChainKitInformation::id()
+                    || ki->id() == QtSupport::QtKitInformation::id())
+                continue;
+            ki->setup(k);
+        }
+        k->setUnexpandedDisplayName(version->displayName());;
+    } // ~KitGuard, sending kitUpdated
 
-    // Set up other values:
-    foreach (ProjectExplorer::KitInformation *ki, ProjectExplorer::KitManager::kitInformation()) {
-        if (ki->id() == ProjectExplorer::ToolChainKitInformation::id()
-                || ki->id() == QtSupport::QtKitInformation::id())
-            continue;
-        ki->setup(k);
-    }
-
-    k->setUnexpandedDisplayName(version->displayName());
-
-    setIsUpdating(true);
-    ProjectExplorer::KitManager::registerKit(k);
-    setIsUpdating(false);
+    ProjectExplorer::KitManager::registerKit(k); // potentially adds kits to other targetsetuppages
+    setIsUpdating(oldIsUpdating);
     return k;
 }
 

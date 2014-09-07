@@ -102,8 +102,8 @@ public:
     {
         QStringList completions;
         CppCompletionAssistInterface *ai
-            = new CppCompletionAssistInterface(m_editorWidget->document(), m_position,
-                                               m_editorWidget->textDocument()->filePath(),
+            = new CppCompletionAssistInterface(m_editorWidget->textDocument()->filePath(),
+                                               m_editorWidget->document(), m_position,
                                                ExplicitlyInvoked, m_snapshot,
                                                ProjectPart::HeaderPaths());
         CppCompletionAssistProcessor processor;
@@ -2353,6 +2353,45 @@ void CppToolsPlugin::test_completion_data()
         ) << _("arr[0]->") << (QStringList()
             << QLatin1String("foo")
             << QLatin1String("Foo"));
+
+    QTest::newRow("template_specialization_with_array1") << _(
+            "template <typename T>\n"
+            "struct S {};\n"
+            "template <typename T>\n"
+            "struct S<T[]> { int foo; };\n"
+            "void fun() {\n"
+            "   S<int[]> s;\n"
+            "   @\n"
+            "}\n"
+    ) << _("s.") << (QStringList()
+        << QLatin1String("foo")
+        << QLatin1String("S"));
+
+    QTest::newRow("template_specialization_with_array2") << _(
+            "template <typename T>\n"
+            "struct S {};\n"
+            "template <typename T, size_t N>\n"
+            "struct S<T[N]> { int foo; };\n"
+            "void fun() {\n"
+            "   S<int[3]> s;\n"
+            "   @\n"
+            "}\n"
+    ) << _("s.") << (QStringList()
+        << QLatin1String("foo")
+        << QLatin1String("S"));
+
+    QTest::newRow("template_specialization_with_array3") << _(
+            "struct Bar {};\n"
+            "template <typename T>\n"
+            "struct S {};\n"
+            "template <>\n"
+            "struct S<Bar[]> { int foo; };\n"
+            "void fun() {\n"
+            "   S<int[]> s;\n"
+            "   @\n"
+            "}\n"
+    ) << _("s.") << (QStringList()
+        << QLatin1String("S"));
 }
 
 void CppToolsPlugin::test_completion_member_access_operator()

@@ -539,7 +539,7 @@ AndroidConfig::CreateAvdInfo AndroidConfig::createAVDImpl(CreateAvdInfo info, Ut
     proc.start(androidToolPath.toString(), arguments);
     if (!proc.waitForStarted()) {
         info.error = QApplication::translate("AndroidConfig", "Could not start process \"%1 %2\"")
-                .arg(androidToolPath.toString(), arguments.join(QLatin1String(" ")));
+                .arg(androidToolPath.toString(), arguments.join(QLatin1Char(' ')));
         return info;
     }
 
@@ -1250,7 +1250,7 @@ void AndroidConfigurations::load()
             int major = -1;
             int minor = -1;
             foreach (const QString &version, allVersions) {
-                QStringList parts = version.split(QLatin1String("."));
+                QStringList parts = version.split(QLatin1Char('.'));
                 if (parts.size() != 2) // not interested in 1.7.0_u21
                     continue;
                 bool okMajor, okMinor;

@@ -56,7 +56,7 @@
 #include <vcsbase/basevcseditorfactory.h>
 #include <vcsbase/basevcssubmiteditorfactory.h>
 #include <vcsbase/vcsbaseeditor.h>
-#include <vcsbase/vcsbaseoutputwindow.h>
+#include <vcsbase/vcsoutputwindow.h>
 #include <vcsbase/vcsbaseeditorparameterwidget.h>
 
 #include <QAction>
@@ -84,36 +84,29 @@ const char SUBMIT_MIMETYPE[] = "text/vnd.qtcreator.p4.submit";
 
 const char PERFORCE_SUBMIT_EDITOR_ID[] = "Perforce.SubmitEditor";
 const char PERFORCE_SUBMIT_EDITOR_DISPLAY_NAME[] = QT_TRANSLATE_NOOP("VCS", "Perforce.SubmitEditor");
-const char PERFORCESUBMITEDITOR_CONTEXT[] = "Perforce Submit Editor";
 
 const char PERFORCE_LOG_EDITOR_ID[] = "Perforce.LogEditor";
 const char PERFORCE_LOG_EDITOR_DISPLAY_NAME[] = QT_TRANSLATE_NOOP("VCS", "Perforce Log Editor");
-const char PERFORCE_LOG_EDITOR_CONTEXT[] = "Perforce Log Editor";
 
 const char PERFORCE_DIFF_EDITOR_ID[] = "Perforce.DiffEditor";
 const char PERFORCE_DIFF_EDITOR_DISPLAY_NAME[] = QT_TRANSLATE_NOOP("VCS", "Perforce Diff Editor");
-const char PERFORCE_DIFF_EDITOR_CONTEXT[] = "Perforce Diff Editor";
 
 const char PERFORCE_ANNOTATION_EDITOR_ID[] = "Perforce.AnnotationEditor";
 const char PERFORCE_ANNOTATION_EDITOR_DISPLAY_NAME[] = QT_TRANSLATE_NOOP("VCS", "Perforce Annotation Editor");
-const char PERFORCE_ANNOTATION_EDITOR_CONTEXT[] = "Perforce Annotation Editor";
 
 const VcsBaseEditorParameters editorParameters[] = {
 {
     VcsBase::LogOutput,
     PERFORCE_LOG_EDITOR_ID,
     PERFORCE_LOG_EDITOR_DISPLAY_NAME,
-    PERFORCE_LOG_EDITOR_CONTEXT,
     "text/vnd.qtcreator.p4.log"},
 {    VcsBase::AnnotateOutput,
     PERFORCE_ANNOTATION_EDITOR_ID,
     PERFORCE_ANNOTATION_EDITOR_DISPLAY_NAME,
-    PERFORCE_ANNOTATION_EDITOR_CONTEXT,
     "text/vnd.qtcreator.p4.annotation"},
 {   VcsBase::DiffOutput,
     PERFORCE_DIFF_EDITOR_ID,
     PERFORCE_DIFF_EDITOR_DISPLAY_NAME,
-    PERFORCE_DIFF_EDITOR_CONTEXT,
     "text/x-patch"}
 };
 
@@ -121,7 +114,7 @@ const VcsBaseEditorParameters editorParameters[] = {
 static inline const VcsBaseEditorParameters *findType(int ie)
 {
     const EditorContentType et = static_cast<EditorContentType>(ie);
-    return VcsBaseEditorWidget::findType(editorParameters, sizeof(editorParameters)/sizeof(editorParameters[0]), et);
+    return VcsBaseEditor::findType(editorParameters, sizeof(editorParameters)/sizeof(editorParameters[0]), et);
 }
 
 static inline QString debugCodec(const QTextCodec *c)
@@ -221,15 +214,11 @@ static const VcsBaseSubmitEditorParameters submitParameters = {
     SUBMIT_MIMETYPE,
     PERFORCE_SUBMIT_EDITOR_ID,
     PERFORCE_SUBMIT_EDITOR_DISPLAY_NAME,
-    PERFORCESUBMITEDITOR_CONTEXT,
     VcsBaseSubmitEditorParameters::DiffFiles
 };
 
 bool PerforcePlugin::initialize(const QStringList & /* arguments */, QString *errorMessage)
 {
-    typedef VcsEditorFactory<PerforceEditor> PerforceEditorFactory;
-    typedef VcsSubmitEditorFactory<PerforceSubmitEditor> PerforceSubmitEditorFactory;
-
     initializeVcs(new PerforceVersionControl(this));
 
     if (!MimeDatabase::addMimeTypes(QLatin1String(":/trolltech.perforce/Perforce.mimetypes.xml"), errorMessage))
@@ -241,12 +230,14 @@ bool PerforcePlugin::initialize(const QStringList & /* arguments */, QString *er
     addAutoReleasedObject(new SettingsPage);
 
     // Editor factories
-    addAutoReleasedObject(new PerforceSubmitEditorFactory(&submitParameters));
+    addAutoReleasedObject(new VcsSubmitEditorFactory(&submitParameters,
+        []() { return new PerforceSubmitEditor(&submitParameters); }));
 
     static const char *describeSlot = SLOT(describe(QString,QString));
     const int editorCount = sizeof(editorParameters) / sizeof(editorParameters[0]);
+    const auto widgetCreator = []() { return new PerforceEditorWidget; };
     for (int i = 0; i < editorCount; i++)
-        addAutoReleasedObject(new PerforceEditorFactory(editorParameters + i, this, describeSlot));
+        addAutoReleasedObject(new VcsEditorFactory(editorParameters + i, widgetCreator, this, describeSlot));
 
     const QString prefix = QLatin1String("p4");
     m_commandLocator = new CommandLocator("Perforce", prefix, prefix);
@@ -260,7 +251,7 @@ bool PerforcePlugin::initialize(const QStringList & /* arguments */, QString *er
     m_menuAction = mperforce->menu()->menuAction();
 
     Context globalcontext(Core::Constants::C_GLOBAL);
-    Context perforcesubmitcontext(PERFORCESUBMITEDITOR_CONTEXT);
+    Context perforcesubmitcontext(PERFORCE_SUBMIT_EDITOR_ID);
 
     Core::Command *command;
 
@@ -468,7 +459,7 @@ void PerforcePlugin::revertCurrentFile()
     const VcsBasePluginState state = currentState();
     QTC_ASSERT(state.hasFile(), return);
 
-    QTextCodec *codec = VcsBaseEditorWidget::getCodec(state.currentFile());
+    QTextCodec *codec = VcsBaseEditor::getCodec(state.currentFile());
     QStringList args;
     args << QLatin1String("diff") << QLatin1String("-sa") << state.relativeCurrentFile();
     PerforceResponse result = runP4Cmd(state.currentFileTopLevel(), args,
@@ -584,7 +575,6 @@ void PerforcePlugin::printOpenedFileList()
         return;
     // reformat "//depot/file.cpp#1 - description" into "file.cpp # - description"
     // for context menu opening to work. This produces absolute paths, then.
-    VcsBaseOutputWindow *outWin = VcsBaseOutputWindow::instance();
     QString errorMessage;
     QString mapped;
     const QChar delimiter = QLatin1Char('#');
@@ -594,11 +584,11 @@ void PerforcePlugin::printOpenedFileList()
         if (delimiterPos > 0)
             mapped = fileNameFromPerforceName(line.left(delimiterPos), true, &errorMessage);
         if (mapped.isEmpty())
-            outWin->appendSilently(line);
+            VcsOutputWindow::appendSilently(line);
         else
-            outWin->appendSilently(mapped + QLatin1Char(' ') + line.mid(delimiterPos));
+            VcsOutputWindow::appendSilently(mapped + QLatin1Char(' ') + line.mid(delimiterPos));
     }
-    outWin->popup(IOutputPane::ModeSwitch | IOutputPane::WithFocus);
+    VcsOutputWindow::instance()->popup(IOutputPane::ModeSwitch | IOutputPane::WithFocus);
 }
 
 void PerforcePlugin::startSubmitProject()
@@ -608,7 +598,7 @@ void PerforcePlugin::startSubmitProject()
         return;
 
     if (isCommitEditorOpen()) {
-        VcsBaseOutputWindow::instance()->appendWarning(tr("Another submit is currently executed."));
+        VcsOutputWindow::appendWarning(tr("Another submit is currently executed."));
         return;
     }
 
@@ -633,7 +623,7 @@ void PerforcePlugin::startSubmitProject()
     saver.setAutoRemove(false);
     saver.write(result.stdOut.toLatin1());
     if (!saver.finalize()) {
-        VcsBaseOutputWindow::instance()->appendError(saver.errorString());
+        VcsOutputWindow::appendError(saver.errorString());
         cleanCommitMessageFile();
         return;
     }
@@ -656,7 +646,7 @@ void PerforcePlugin::startSubmitProject()
             depotFileNames.append(line.mid(14));
     }
     if (depotFileNames.isEmpty()) {
-        VcsBaseOutputWindow::instance()->appendWarning(tr("Project has no files"));
+        VcsOutputWindow::appendWarning(tr("Project has no files"));
         cleanCommitMessageFile();
         return;
     }
@@ -725,9 +715,9 @@ void PerforcePlugin::annotate(const QString &workingDir,
                               int lineNumber /* = -1 */)
 {
     const QStringList files = QStringList(fileName);
-    QTextCodec *codec = VcsBaseEditorWidget::getCodec(workingDir, files);
-    const QString id = VcsBaseEditorWidget::getTitleId(workingDir, files, changeList);
-    const QString source = VcsBaseEditorWidget::getSource(workingDir, files);
+    QTextCodec *codec = VcsBaseEditor::getCodec(workingDir, files);
+    const QString id = VcsBaseEditor::getTitleId(workingDir, files, changeList);
+    const QString source = VcsBaseEditor::getSource(workingDir, files);
     QStringList args;
     args << QLatin1String("annotate") << QLatin1String("-cqi");
     if (changeList.isEmpty())
@@ -739,11 +729,11 @@ void PerforcePlugin::annotate(const QString &workingDir,
                                              QStringList(), QByteArray(), codec);
     if (!result.error) {
         if (lineNumber < 1)
-            lineNumber = VcsBaseEditorWidget::lineNumberOfCurrentEditor();
+            lineNumber = VcsBaseEditor::lineNumberOfCurrentEditor();
         IEditor *ed = showOutputInEditor(tr("p4 annotate %1").arg(id),
                                          result.stdOut, VcsBase::AnnotateOutput,
                                          source, codec);
-        VcsBaseEditorWidget::gotoLineOfEditor(ed, lineNumber);
+        VcsBaseEditor::gotoLineOfEditor(ed, lineNumber);
     }
 }
 
@@ -780,8 +770,8 @@ void PerforcePlugin::logRepository()
 void PerforcePlugin::filelog(const QString &workingDir, const QString &fileName,
                              bool enableAnnotationContextMenu)
 {
-    const QString id = VcsBaseEditorWidget::getTitleId(workingDir, QStringList(fileName));
-    QTextCodec *codec = VcsBaseEditorWidget::getCodec(workingDir, QStringList(fileName));
+    const QString id = VcsBaseEditor::getTitleId(workingDir, QStringList(fileName));
+    QTextCodec *codec = VcsBaseEditor::getCodec(workingDir, QStringList(fileName));
     QStringList args;
     args << QLatin1String("filelog") << QLatin1String("-li");
     if (m_settings.logCount() > 0)
@@ -792,11 +782,11 @@ void PerforcePlugin::filelog(const QString &workingDir, const QString &fileName,
                                              CommandToWindow|StdErrToWindow|ErrorToWindow,
                                              QStringList(), QByteArray(), codec);
     if (!result.error) {
-        const QString source = VcsBaseEditorWidget::getSource(workingDir, fileName);
+        const QString source = VcsBaseEditor::getSource(workingDir, fileName);
         IEditor *editor = showOutputInEditor(tr("p4 filelog %1").arg(id), result.stdOut,
                                 VcsBase::LogOutput, source, codec);
         if (enableAnnotationContextMenu)
-            VcsBaseEditorWidget::getVcsBaseEditor(editor)->setFileLogAnnotateEnabled(true);
+            VcsBaseEditor::getVcsBaseEditor(editor)->setFileLogAnnotateEnabled(true);
     }
 }
 
@@ -1007,7 +997,7 @@ PerforceResponse PerforcePlugin::synchronousProcess(const QString &workingDir,
 {
     QTC_ASSERT(stdInput.isEmpty(), return PerforceResponse()); // Not supported here
 
-    VcsBaseOutputWindow *outputWindow = VcsBaseOutputWindow::instance();
+    VcsOutputWindow *outputWindow = VcsOutputWindow::instance();
     // Run, connect stderr to the output window
     SynchronousProcess process;
     const int timeOut = (flags & LongTimeOut) ? settings().longTimeOutMS() : settings().timeOutMS();
@@ -1129,11 +1119,10 @@ PerforceResponse PerforcePlugin::fullySynchronousProcess(const QString &workingD
     response.stdErr.remove(cr);
     response.stdOut.remove(cr);
     // Logging
-    VcsBaseOutputWindow *outputWindow = VcsBaseOutputWindow::instance();
     if ((flags & StdErrToWindow) && !response.stdErr.isEmpty())
-        outputWindow->appendError(response.stdErr);
+        VcsOutputWindow::appendError(response.stdErr);
     if ((flags & StdOutToWindow) && !response.stdOut.isEmpty())
-        outputWindow->append(response.stdOut, VcsBaseOutputWindow::None, flags & SilentStdOut);
+        VcsOutputWindow::append(response.stdOut, VcsOutputWindow::None, flags & SilentStdOut);
     return response;
 }
 
@@ -1147,12 +1136,11 @@ PerforceResponse PerforcePlugin::runP4Cmd(const QString &workingDir,
     if (Perforce::Constants::debug)
         qDebug() << "PerforcePlugin::runP4Cmd [" << workingDir << ']' << args << extraArgs << stdInput << debugCodec(outputCodec);
 
-    VcsBaseOutputWindow *outputWindow = VcsBaseOutputWindow::instance();
     if (!settings().isValid()) {
         PerforceResponse invalidConfigResponse;
         invalidConfigResponse.error = true;
         invalidConfigResponse.message = tr("Perforce is not correctly configured.");
-        outputWindow->appendError(invalidConfigResponse.message);
+        VcsOutputWindow::appendError(invalidConfigResponse.message);
         return invalidConfigResponse;
     }
     QStringList actualArgs = settings().commonP4Arguments(workingDir);
@@ -1169,7 +1157,7 @@ PerforceResponse PerforcePlugin::runP4Cmd(const QString &workingDir,
     actualArgs.append(args);
 
     if (flags & CommandToWindow)
-        outputWindow->appendCommand(workingDir, FileName::fromString(settings().p4BinaryPath()), actualArgs);
+        VcsOutputWindow::appendCommand(workingDir, FileName::fromString(settings().p4BinaryPath()), actualArgs);
 
     if (flags & ShowBusyCursor)
         QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
@@ -1185,7 +1173,7 @@ PerforceResponse PerforcePlugin::runP4Cmd(const QString &workingDir,
         if (Perforce::Constants::debug)
             qDebug() << response.message;
         if (flags & ErrorToWindow)
-            outputWindow->appendError(response.message);
+            VcsOutputWindow::appendError(response.message);
     }
     return response;
 }
@@ -1206,7 +1194,7 @@ IEditor *PerforcePlugin::showOutputInEditor(const QString &title,
     IEditor *editor = EditorManager::openEditorWithContents(id, &s, output.toUtf8());
     connect(editor, SIGNAL(annotateRevisionRequested(QString,QString,QString,int)),
             this, SLOT(vcsAnnotate(QString,QString,QString,int)));
-    PerforceEditor *e = qobject_cast<PerforceEditor*>(editor->widget());
+    PerforceEditorWidget *e = qobject_cast<PerforceEditorWidget*>(editor->widget());
     if (!e)
         return 0;
     e->setForceReadOnly(true);
@@ -1273,11 +1261,11 @@ void PerforcePlugin::p4Diff(const QString &workingDir, const QStringList &files)
 
 void PerforcePlugin::p4Diff(const PerforceDiffParameters &p)
 {
-    QTextCodec *codec = VcsBaseEditorWidget::getCodec(p.workingDir, p.files);
-    const QString id = VcsBaseEditorWidget::getTitleId(p.workingDir, p.files);
+    QTextCodec *codec = VcsBaseEditor::getCodec(p.workingDir, p.files);
+    const QString id = VcsBaseEditor::getTitleId(p.workingDir, p.files);
     // Reuse existing editors for that id
-    const QString tag = VcsBaseEditorWidget::editorTag(VcsBase::DiffOutput, p.workingDir, p.files);
-    IEditor *existingEditor = VcsBaseEditorWidget::locateEditorByTag(tag);
+    const QString tag = VcsBaseEditor::editorTag(VcsBase::DiffOutput, p.workingDir, p.files);
+    IEditor *existingEditor = VcsBaseEditor::locateEditorByTag(tag);
     // Split arguments according to size
     QStringList args;
     args << QLatin1String("diff");
@@ -1301,9 +1289,9 @@ void PerforcePlugin::p4Diff(const PerforceDiffParameters &p)
     }
     // Create new editor
     IEditor *editor = showOutputInEditor(tr("p4 diff %1").arg(id), result.stdOut, VcsBase::DiffOutput,
-                                         VcsBaseEditorWidget::getSource(p.workingDir, p.files),
+                                         VcsBaseEditor::getSource(p.workingDir, p.files),
                                          codec);
-    VcsBaseEditorWidget::tagEditor(editor, tag);
+    VcsBaseEditor::tagEditor(editor, tag);
     VcsBaseEditorWidget *diffEditorWidget = qobject_cast<VcsBaseEditorWidget *>(editor->widget());
     // Wire up the parameter widget to trigger a re-run on
     // parameter change and 'revert' from inside the diff editor.
@@ -1317,7 +1305,7 @@ void PerforcePlugin::p4Diff(const PerforceDiffParameters &p)
 
 void PerforcePlugin::describe(const QString & source, const QString &n)
 {
-    QTextCodec *codec = source.isEmpty() ? static_cast<QTextCodec *>(0) : VcsBaseEditorWidget::getCodec(source);
+    QTextCodec *codec = source.isEmpty() ? static_cast<QTextCodec *>(0) : VcsBaseEditor::getCodec(source);
     QStringList args;
     args << QLatin1String("describe") << QLatin1String("-du") << n;
     const PerforceResponse result = runP4Cmd(m_settings.topLevel(), args, CommandToWindow|StdErrToWindow|ErrorToWindow,
@@ -1329,7 +1317,8 @@ void PerforcePlugin::describe(const QString & source, const QString &n)
 void PerforcePlugin::submitCurrentLog()
 {
     m_submitActionTriggered = true;
-    EditorManager::closeEditor(submitEditor());
+    QTC_ASSERT(submitEditor(), return);
+    EditorManager::closeDocument(submitEditor()->document());
 }
 
 void PerforcePlugin::cleanCommitMessageFile()
@@ -1381,7 +1370,7 @@ bool PerforcePlugin::submitEditorAboutToClose()
     // Pipe file into p4 submit -i
     FileReader reader;
     if (!reader.fetch(m_commitMessageFileName, QIODevice::Text)) {
-        VcsBaseOutputWindow::instance()->appendError(reader.errorString());
+        VcsOutputWindow::appendError(reader.errorString());
         return false;
     }
 
@@ -1391,10 +1380,10 @@ bool PerforcePlugin::submitEditorAboutToClose()
                                                      LongTimeOut|RunFullySynchronous|CommandToWindow|StdErrToWindow|ErrorToWindow|ShowBusyCursor,
                                                      QStringList(), reader.data());
     if (submitResponse.error) {
-        VcsBaseOutputWindow::instance()->appendError(tr("p4 submit failed: %1").arg(submitResponse.message));
+        VcsOutputWindow::appendError(tr("p4 submit failed: %1").arg(submitResponse.message));
         return false;
     }
-    VcsBaseOutputWindow::instance()->append(submitResponse.stdOut);
+    VcsOutputWindow::append(submitResponse.stdOut);
     if (submitResponse.stdOut.contains(QLatin1String("Out of date files must be resolved or reverted)")))
         QMessageBox::warning(perforceEditor->widget(), tr("Pending change"), tr("Could not submit the change, because your workspace was out of date. Created a pending submit instead."));
 
@@ -1520,14 +1509,14 @@ void PerforcePlugin::slotTopLevelFound(const QString &t)
     m_settings.setTopLevel(t);
     const QString msg = tr("Perforce repository: %1").
                         arg(QDir::toNativeSeparators(t));
-    VcsBaseOutputWindow::instance()->appendSilently(msg);
+    VcsOutputWindow::appendSilently(msg);
     if (Perforce::Constants::debug)
         qDebug() << "P4: " << t;
 }
 
 void PerforcePlugin::slotTopLevelFailed(const QString &errorMessage)
 {
-    VcsBaseOutputWindow::instance()->appendSilently(tr("Perforce: Unable to determine the repository: %1").arg(errorMessage));
+    VcsOutputWindow::appendSilently(tr("Perforce: Unable to determine the repository: %1").arg(errorMessage));
     if (Perforce::Constants::debug)
         qDebug() << errorMessage;
 }
@@ -1557,14 +1546,11 @@ void PerforcePlugin::testLogResolving()
                 "\n"
                 "        Comment\n"
                 );
-    PerforceEditor editor(editorParameters, 0);
-    editor.testLogResolving(data, "12345", "12344");
+    VcsBaseEditorWidget::testLogResolving(editorParameters[0].id, data, "12345", "12344");
 }
 #endif
 
-}
-}
-
-Q_EXPORT_PLUGIN(Perforce::Internal::PerforcePlugin)
+} // namespace Internal
+} // namespace Perforce
 
 #include "perforceplugin.moc"

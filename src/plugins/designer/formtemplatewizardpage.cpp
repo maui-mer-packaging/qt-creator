@@ -32,12 +32,7 @@
 
 #include <utils/wizard.h>
 
-#if QT_VERSION >= 0x050000
-#    include <QDesignerNewFormWidgetInterface>
-#else
-#    include "qt_private/abstractnewformwidget_p.h"
-#endif
-
+#include <QDesignerNewFormWidgetInterface>
 #include <QDebug>
 #include <QXmlStreamReader>
 #include <QXmlStreamAttributes>
@@ -56,7 +51,7 @@ namespace Internal {
 
 FormTemplateWizardPage::FormTemplateWizardPage(QWidget * parent) :
     QWizardPage(parent),
-    m_newFormWidget(QDesignerNewFormWidgetInterface::createNewFormWidget(FormEditorW::instance()->designerEditor())),
+    m_newFormWidget(QDesignerNewFormWidgetInterface::createNewFormWidget(FormEditorW::designerEditor())),
     m_templateSelected(m_newFormWidget->hasCurrentTemplate())
 {
     setTitle(tr("Choose a Form Template"));

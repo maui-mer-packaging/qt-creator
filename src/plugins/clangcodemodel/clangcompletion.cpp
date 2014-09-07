@@ -44,6 +44,7 @@
 
 #include <cpptools/cppdoxygen.h>
 #include <cpptools/cppmodelmanagerinterface.h>
+#include <cpptools/cppworkingcopy.h>
 
 #include <texteditor/basetexteditor.h>
 #include <texteditor/convenience.h>
@@ -202,15 +203,13 @@ IAssistProcessor *ClangCompletionAssistProvider::createProcessor() const
 }
 
 IAssistInterface *ClangCompletionAssistProvider::createAssistInterface(
-        ProjectExplorer::Project *project, TextEditor::BaseTextEditor *editor,
+        const QString &filePath,
         QTextDocument *document, bool isObjCEnabled, int position, AssistReason reason) const
 {
-    Q_UNUSED(project);
     Q_UNUSED(isObjCEnabled);
 
-    QString fileName = editor->document()->filePath();
     CppModelManagerInterface *modelManager = CppModelManagerInterface::instance();
-    QList<ProjectPart::Ptr> parts = modelManager->projectPart(fileName);
+    QList<ProjectPart::Ptr> parts = modelManager->projectPart(filePath);
     if (parts.isEmpty())
         parts += modelManager->fallbackProjectPart();
     ProjectPart::HeaderPaths headerPaths;
@@ -219,7 +218,7 @@ IAssistInterface *ClangCompletionAssistProvider::createAssistInterface(
     foreach (ProjectPart::Ptr part, parts) {
         if (part.isNull())
             continue;
-        options = ClangCodeModel::Utils::createClangOptions(part, fileName);
+        options = ClangCodeModel::Utils::createClangOptions(part, filePath);
         pchInfo = PchManager::instance()->pchInfo(part);
         if (!pchInfo.isNull())
             options.append(ClangCodeModel::Utils::createPCHInclusionOptions(pchInfo->fileName()));
@@ -229,7 +228,7 @@ IAssistInterface *ClangCompletionAssistProvider::createAssistInterface(
 
     return new ClangCodeModel::ClangCompletionAssistInterface(
                 m_clangCompletionWrapper,
-                document, position, fileName, reason,
+                document, position, filePath, reason,
                 options, headerPaths, pchInfo);
 }
 
@@ -311,11 +310,11 @@ QString ClangFunctionHintModel::text(int index) const
     const int end = overview.markedArgumentEnd();
 
     QString hintText;
-    hintText += Qt::escape(prettyMethod.left(begin));
+    hintText += prettyMethod.left(begin).toHtmlEscaped());
     hintText += "<b>";
-    hintText += Qt::escape(prettyMethod.mid(begin, end - begin));
+    hintText += prettyMethod.mid(begin, end - begin).toHtmlEscaped());
     hintText += "</b>";
-    hintText += Qt::escape(prettyMethod.mid(end));
+    hintText += prettyMethod.mid(end).toHtmlEscaped());
     return hintText;
 #endif
     return m_functionSymbols.at(index).hint();
@@ -456,7 +455,7 @@ void ClangAssistProposalItem::applyContextualContent(TextEditor::BaseTextEditor 
 
             // If the function doesn't return anything, automatically place the semicolon,
             // unless we're doing a scope completion (then it might be function definition).
-            const QChar characterAtCursor = editor->textDocument()->characterAt(editor->position());
+            const QChar characterAtCursor = editor->characterAt(editor->position());
             bool endWithSemicolon = m_typedChar == QLatin1Char(';')/*
                                             || (function->returnType()->isVoidType() && m_completionOperator != T_COLON_COLON)*/; //###
             const QChar semicolon = m_typedChar.isNull() ? QLatin1Char(';') : m_typedChar;
@@ -474,7 +473,7 @@ void ClangAssistProposalItem::applyContextualContent(TextEditor::BaseTextEditor 
                     m_typedChar = QChar();
                 }
             } else if (autoParenthesesEnabled) {
-                const QChar lookAhead = editor->textDocument()->characterAt(editor->position() + 1);
+                const QChar lookAhead = editor->characterAt(editor->position() + 1);
                 if (MatchingText::shouldInsertMatchingText(lookAhead)) {
                     extraChars += QLatin1Char(')');
                     --cursorOffset;
@@ -510,8 +509,7 @@ void ClangAssistProposalItem::applyContextualContent(TextEditor::BaseTextEditor 
 
     // Avoid inserting characters that are already there
     const int endsPosition = editor->position(TextEditor::BaseTextEditor::EndOfLine);
-    const QString existingText = editor->textDocument()->textAt(editor->position(),
-                                                                endsPosition - editor->position());
+    const QString existingText = editor->textAt(editor->position(), endsPosition - editor->position());
     int existLength = 0;
     if (!existingText.isEmpty()) {
         // Calculate the exist length in front of the extra chars
@@ -523,7 +521,7 @@ void ClangAssistProposalItem::applyContextualContent(TextEditor::BaseTextEditor 
     }
     for (int i = 0; i < extraChars.length(); ++i) {
         const QChar a = extraChars.at(i);
-        const QChar b = editor->textDocument()->characterAt(editor->position() + i + existLength);
+        const QChar b = editor->characterAt(editor->position() + i + existLength);
         if (a == b)
             ++extraLength;
         else

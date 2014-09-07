@@ -37,46 +37,36 @@
 #include <texteditor/basetexteditor.h>
 #include <texteditor/quickfix.h>
 #include <texteditor/texteditorconstants.h>
+#include <utils/uncommentselection.h>
 
-#include <QSharedPointer>
 #include <QModelIndex>
-#include <QTextLayout>
-#include <QVector>
+#include <QTimer>
 
 QT_BEGIN_NAMESPACE
 class QComboBox;
-class QTimer;
 QT_END_NAMESPACE
-
-namespace Core { class ICore; }
 
 namespace QmlJS {
     class ModelManagerInterface;
     class IContextPane;
-    class LookupContext;
 namespace AST { class UiObjectMember; }
 }
 
-/*!
-    The top-level namespace of the QmlJSEditor plug-in.
- */
 namespace QmlJSEditor {
+
 class QmlJSEditorDocument;
 class FindReferences;
 
 namespace Internal {
 
-class QmlJSEditor;
-class QmlOutlineModel;
-
-class QmlJSTextEditorWidget : public TextEditor::BaseTextEditorWidget
+class QmlJSEditorWidget : public TextEditor::BaseTextEditorWidget
 {
     Q_OBJECT
 
 public:
-    QmlJSTextEditorWidget(QWidget *parent = 0);
-    QmlJSTextEditorWidget(QmlJSTextEditorWidget *other);
-    ~QmlJSTextEditorWidget();
+    QmlJSEditorWidget();
+
+    void finalizeInitialization();
 
     QmlJSEditorDocument *qmlJsEditorDocument() const;
 
@@ -104,7 +94,6 @@ private slots:
     void updateUses();
 
     void semanticInfoUpdated(const QmlJSTools::SemanticInfo &semanticInfo);
-    void onRefactorMarkerClicked(const TextEditor::RefactorMarker &marker);
 
     void performQuickFix(int index);
     void updateCodeWarnings(QmlJS::Document::Ptr doc);
@@ -116,16 +105,14 @@ protected:
     void resizeEvent(QResizeEvent *event);
     void scrollContentsBy(int dx, int dy);
     void applyFontSettings();
-    TextEditor::BaseTextEditor *createEditor();
-    void createToolBar(QmlJSEditor *editable);
+    void createToolBar();
     TextEditor::BaseTextEditorWidget::Link findLinkAt(const QTextCursor &cursor,
                                                       bool resolveTarget = true,
                                                       bool inNextSplit = false);
     QString foldReplacementText(const QTextBlock &block) const;
+    void onRefactorMarkerClicked(const TextEditor::RefactorMarker &marker);
 
 private:
-    QmlJSTextEditorWidget(TextEditor::BaseTextEditorWidget *); // avoid stupidity
-    void ctor();
     bool isClosingBrace(const QList<QmlJS::Token> &tokens) const;
 
     void setSelectedElements();
@@ -135,9 +122,9 @@ private:
     bool hideContextPane();
 
     QmlJSEditorDocument *m_qmlJsEditorDocument;
-    QTimer *m_updateUsesTimer; // to wait for multiple text cursor position changes
-    QTimer *m_updateOutlineIndexTimer;
-    QTimer *m_contextPaneTimer;
+    QTimer m_updateUsesTimer; // to wait for multiple text cursor position changes
+    QTimer m_updateOutlineIndexTimer;
+    QTimer m_contextPaneTimer;
     QComboBox *m_outlineCombo;
     QModelIndex m_outlineModelIndex;
     QmlJS::ModelManagerInterface *m_modelManager;
@@ -148,6 +135,25 @@ private:
     int m_oldCursorPosition;
 
     FindReferences *m_findReferences;
+};
+
+
+class QmlJSEditor : public TextEditor::BaseTextEditor
+{
+    Q_OBJECT
+
+public:
+    QmlJSEditor();
+
+    bool isDesignModePreferred() const;
+};
+
+class QmlJSEditorFactory : public TextEditor::BaseTextEditorFactory
+{
+    Q_OBJECT
+
+public:
+    QmlJSEditorFactory();
 };
 
 } // namespace Internal

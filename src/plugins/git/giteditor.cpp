@@ -39,7 +39,7 @@
 
 #include <coreplugin/icore.h>
 #include <utils/qtcassert.h>
-#include <vcsbase/vcsbaseoutputwindow.h>
+#include <vcsbase/vcsoutputwindow.h>
 #include <texteditor/basetextdocument.h>
 
 #include <QFileInfo>
@@ -55,11 +55,12 @@
 
 #define CHANGE_PATTERN "[a-f0-9]{7,40}"
 
+using namespace VcsBase;
+
 namespace Git {
 namespace Internal {
 
-GitEditorWidget::GitEditorWidget(const VcsBase::VcsBaseEditorParameters *type, QWidget *parent)  :
-    VcsBase::VcsBaseEditorWidget(type, parent),
+GitEditorWidget::GitEditorWidget() :
     m_changeNumberPattern(QLatin1String(CHANGE_PATTERN))
 {
     QTC_ASSERT(m_changeNumberPattern.isValid(), return);
@@ -256,7 +257,6 @@ void GitEditorWidget::unstageDiffChunk()
 
 void GitEditorWidget::applyDiffChunk(const VcsBase::DiffChunk& chunk, bool revert)
 {
-    VcsBase::VcsBaseOutputWindow *outwin = VcsBase::VcsBaseOutputWindow::instance();
     QTemporaryFile patchFile;
     if (!patchFile.open())
         return;
@@ -273,26 +273,26 @@ void GitEditorWidget::applyDiffChunk(const VcsBase::DiffChunk& chunk, bool rever
     QString errorMessage;
     if (client->synchronousApplyPatch(baseDir, patchFile.fileName(), &errorMessage, args)) {
         if (errorMessage.isEmpty())
-            outwin->append(tr("Chunk successfully staged"));
+            VcsOutputWindow::append(tr("Chunk successfully staged"));
         else
-            outwin->append(errorMessage);
+            VcsOutputWindow::append(errorMessage);
         if (revert)
             emit diffChunkReverted(chunk);
         else
             emit diffChunkApplied(chunk);
     } else {
-        outwin->appendError(errorMessage);
+        VcsOutputWindow::appendError(errorMessage);
     }
 }
 
 void GitEditorWidget::init()
 {
     VcsBase::VcsBaseEditorWidget::init();
-    Core::Id editorId = editor()->document()->id();
+    Core::Id editorId = textDocument()->id();
     if (editorId == Git::Constants::GIT_COMMIT_TEXT_EDITOR_ID)
-        new GitSubmitHighlighter(textDocument());
+        textDocument()->setSyntaxHighlighter(new GitSubmitHighlighter);
     else if (editorId == Git::Constants::GIT_REBASE_EDITOR_ID)
-        new GitRebaseHighlighter(textDocument());
+        textDocument()->setSyntaxHighlighter(new GitRebaseHighlighter);
 }
 
 void GitEditorWidget::addDiffActions(QMenu *menu, const VcsBase::DiffChunk &chunk)
@@ -310,7 +310,7 @@ void GitEditorWidget::addDiffActions(QMenu *menu, const VcsBase::DiffChunk &chun
 
 bool GitEditorWidget::open(QString *errorString, const QString &fileName, const QString &realFileName)
 {
-    Core::Id editorId = editor()->document()->id();
+    Core::Id editorId = textDocument()->id();
     if (editorId == Git::Constants::GIT_COMMIT_TEXT_EDITOR_ID
             || editorId == Git::Constants::GIT_REBASE_EDITOR_ID) {
         QFileInfo fi(fileName);
@@ -341,7 +341,7 @@ QStringList GitEditorWidget::annotationPreviousVersions(const QString &revision)
     // Get the SHA1's of the file.
     if (!client->synchronousParentRevisions(workingDirectory, QStringList(fi.fileName()),
                                             revision, &revisions, &errorMessage)) {
-        VcsBase::VcsBaseOutputWindow::instance()->appendSilently(errorMessage);
+        VcsOutputWindow::appendSilently(errorMessage);
         return QStringList();
     }
     return revisions;
@@ -378,8 +378,8 @@ QString GitEditorWidget::revisionSubject(const QTextBlock &inBlock) const
 bool GitEditorWidget::supportChangeLinks() const
 {
     return VcsBaseEditorWidget::supportChangeLinks()
-            || (editor()->document()->id() == Git::Constants::GIT_COMMIT_TEXT_EDITOR_ID)
-            || (editor()->document()->id() == Git::Constants::GIT_REBASE_EDITOR_ID);
+            || (textDocument()->id() == Git::Constants::GIT_COMMIT_TEXT_EDITOR_ID)
+            || (textDocument()->id() == Git::Constants::GIT_REBASE_EDITOR_ID);
 }
 
 QString GitEditorWidget::fileNameForLine(int line) const

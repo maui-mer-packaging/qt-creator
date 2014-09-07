@@ -30,16 +30,11 @@
 #ifndef CPPEDITOR_H
 #define CPPEDITOR_H
 
-#include "cppeditordocument.h"
-
 #include "cppfunctiondecldeflink.h"
 
 #include <texteditor/basetexteditor.h>
-#include <texteditor/semantichighlighter.h>
-#include <texteditor/texteditorconstants.h>
 
 #include <utils/qtcoverride.h>
-#include <utils/uncommentselection.h>
 
 #include <QScopedPointer>
 
@@ -49,23 +44,18 @@ namespace CppTools { class SemanticInfo; }
 namespace CppEditor {
 namespace Internal {
 
+class CppEditorDocument;
 class CppEditorOutline;
-class CppEditorWidget;
 class CppEditorWidgetPrivate;
 class FollowSymbolUnderCursor;
+class FunctionDeclDefLink;
 
-class CPPEditor : public TextEditor::BaseTextEditor
+class CppEditor : public TextEditor::BaseTextEditor
 {
     Q_OBJECT
 
 public:
-    CPPEditor(CppEditorWidget *);
-
-    Core::IEditor *duplicate() QTC_OVERRIDE;
-
-    bool open(QString *errorString,
-              const QString &fileName,
-              const QString &realFileName) QTC_OVERRIDE;
+    CppEditor();
 };
 
 class CppEditorWidget : public TextEditor::BaseTextEditorWidget
@@ -74,17 +64,17 @@ class CppEditorWidget : public TextEditor::BaseTextEditorWidget
 
 public:
     static Link linkToSymbol(CPlusPlus::Symbol *symbol);
-    static QString identifierUnderCursor(QTextCursor *macroCursor);
 
 public:
-    CppEditorWidget(QWidget *parent = 0);
-    CppEditorWidget(CppEditorWidget *other);
+    CppEditorWidget();
     ~CppEditorWidget();
 
-    CPPEditorDocument *cppEditorDocument() const;
+    CppEditorDocument *cppEditorDocument() const;
     CppEditorOutline *outline() const;
 
     CppTools::SemanticInfo semanticInfo() const;
+    bool isSemanticInfoValidExceptLocalUses() const;
+    bool isSemanticInfoValid() const;
 
     QSharedPointer<FunctionDeclDefLink> declDefLink() const;
     void applyDeclDefLinkChanges(bool jumpToMatch);
@@ -94,6 +84,7 @@ public:
             TextEditor::AssistReason reason) const QTC_OVERRIDE;
 
     FollowSymbolUnderCursor *followSymbolUnderCursorDelegate(); // exposed for tests
+    TextEditor::CompletionAssistProvider *completionAssistProvider() const QTC_OVERRIDE;
 
 public slots:
     void paste() QTC_OVERRIDE;
@@ -107,17 +98,12 @@ public slots:
     void renameSymbolUnderCursor();
     void renameUsages(const QString &replacement = QString());
 
-    void semanticRehighlight(bool force = false);
-    void highlighterStarted(QFuture<TextEditor::HighlightingResult> *highlighter,
-                            unsigned revision);
-
 protected:
     bool event(QEvent *e) QTC_OVERRIDE;
     void contextMenuEvent(QContextMenuEvent *) QTC_OVERRIDE;
     void keyPressEvent(QKeyEvent *e) QTC_OVERRIDE;
 
     void applyFontSettings() QTC_OVERRIDE;
-    TextEditor::BaseTextEditor *createEditor() QTC_OVERRIDE;
 
     bool openLink(const Link &link, bool inNextSplit) QTC_OVERRIDE
     { return openCppEditorAt(link, inNextSplit); }
@@ -125,50 +111,40 @@ protected:
     Link findLinkAt(const QTextCursor &, bool resolveTarget = true,
                     bool inNextSplit = false) QTC_OVERRIDE;
 
+    void onRefactorMarkerClicked(const TextEditor::RefactorMarker &marker) QTC_OVERRIDE;
+
 protected slots:
     void slotCodeStyleSettingsChanged(const QVariant &) QTC_OVERRIDE;
 
 private slots:
-    void updateUses();
-    void updateUsesNow();
     void updateFunctionDeclDefLink();
     void updateFunctionDeclDefLinkNow();
+    void abortDeclDefLink();
     void onFunctionDeclDefLinkFound(QSharedPointer<FunctionDeclDefLink> link);
+
     void onFilePathChanged();
-    void onDocumentUpdated();
-    void onContentsChanged(int position, int charsRemoved, int charsAdded);
+    void onCppDocumentUpdated();
+
+    void onCodeWarningsUpdated(unsigned revision,
+                               const QList<QTextEdit::ExtraSelection> selections);
+    void onIfdefedOutBlocksUpdated(unsigned revision,
+                                   const QList<TextEditor::BlockRange> ifdefedOutBlocks);
+
+    void updateSemanticInfo(const CppTools::SemanticInfo &semanticInfo,
+                            bool updateUseSelectionSynchronously = false);
     void updatePreprocessorButtonTooltip();
 
-    void updateSemanticInfo(const CppTools::SemanticInfo &semanticInfo);
-    void highlightSymbolUsages(int from, int to);
-    void finishHighlightSymbolUsages();
-
-    void markSymbolsNow();
     void performQuickFix(int index);
-    void onRefactorMarkerClicked(const TextEditor::RefactorMarker &marker);
-    void abortDeclDefLink();
 
-    void onLocalRenamingFinished();
-    void onLocalRenamingProcessKeyPressNormally(QKeyEvent *e);
+    void processKeyNormally(QKeyEvent *e);
 
 private:
+    void finalizeInitialization() QTC_OVERRIDE;
+    void finalizeInitializationAfterDuplication(BaseTextEditorWidget *other) QTC_OVERRIDE;
+
     static bool openCppEditorAt(const Link &, bool inNextSplit = false);
 
-    CppEditorWidget(TextEditor::BaseTextEditorWidget *); // avoid stupidity
-    void ctor();
-
-    unsigned editorRevision() const;
-    bool isOutdated() const;
-
-    const CPlusPlus::Macro *findCanonicalMacro(const QTextCursor &cursor,
-                                               CPlusPlus::Document::Ptr doc) const;
-
-    QTextCharFormat textCharFormat(TextEditor::TextStyle category);
-
-    void markSymbols(const QTextCursor &tc, const CppTools::SemanticInfo &info);
-
-    QList<QTextEdit::ExtraSelection> createSelectionsFromUses(
-            const QList<TextEditor::HighlightingResult> &uses);
+    unsigned documentRevision() const;
 
 private:
     QScopedPointer<CppEditorWidgetPrivate> d;

@@ -30,12 +30,7 @@
 #include "settingspage.h"
 #include "formeditorw.h"
 
-#if QT_VERSION >= 0x050000
-#    include <QDesignerOptionsPageInterface>
-#else
-#    include "qt_private/abstractoptionspage_p.h"
-#endif
-
+#include <QDesignerOptionsPageInterface>
 #include <QCoreApplication>
 
 using namespace Designer::Internal;
@@ -89,7 +84,7 @@ QList<Core::IOptionsPage *> SettingsPageProvider::pages() const
         m_initialized = true;
         FormEditorW::ensureInitStage(FormEditorW::RegisterPlugins);
     }
-    return FormEditorW::instance()->optionsPages();
+    return FormEditorW::optionsPages();
 }
 
 bool SettingsPageProvider::matches(const QString &searchKeyWord) const

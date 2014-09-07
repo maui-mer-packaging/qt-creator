@@ -31,46 +31,14 @@
 #define GENERICPROJECTFILESEDITOR_H
 
 #include <texteditor/basetexteditor.h>
-#include <texteditor/basetextdocument.h>
-
-#include <coreplugin/editormanager/ieditorfactory.h>
 
 namespace GenericProjectManager {
 namespace Internal {
 
-class Manager;
-class ProjectFilesEditor;
-class ProjectFilesEditorWidget;
-
-class ProjectFilesFactory: public Core::IEditorFactory
+class ProjectFilesFactory : public TextEditor::BaseTextEditorFactory
 {
-    Q_OBJECT
-
 public:
-    ProjectFilesFactory(Manager *manager);
-
-    Core::IEditor *createEditor();
-};
-
-class ProjectFilesEditor : public TextEditor::BaseTextEditor
-{
-    Q_OBJECT
-
-public:
-    ProjectFilesEditor(ProjectFilesEditorWidget *editorWidget);
-
-    Core::IEditor *duplicate();
-};
-
-class ProjectFilesEditorWidget : public TextEditor::BaseTextEditorWidget
-{
-    Q_OBJECT
-
-public:
-    ProjectFilesEditorWidget(TextEditor::BaseTextDocument *doc, QWidget *parent);
-    ProjectFilesEditorWidget(BaseTextEditorWidget *other);
-
-    TextEditor::BaseTextEditor *createEditor();
+    ProjectFilesFactory();
 };
 
 } // namespace Internal

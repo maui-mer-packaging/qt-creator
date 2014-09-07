@@ -47,7 +47,6 @@
 #include <projectexplorer/kitinformation.h>
 
 #include <texteditor/texteditoractionhandler.h>
-#include <texteditor/texteditorsettings.h>
 #include <texteditor/basetexteditor.h>
 #include <utils/algorithm.h>
 
@@ -112,7 +111,6 @@ AndroidManifestEditorWidget::AndroidManifestEditorWidget()
 {
     m_textEditorWidget = new AndroidManifestTextEditorWidget(this);
     m_textEditorWidget->setupAsPlainEditor();
-    TextEditor::TextEditorSettings::initializeEditor(m_textEditorWidget);
 
     initializePage();
 
@@ -286,20 +284,23 @@ void AndroidManifestEditorWidget::initializePage()
         QGridLayout *layout = new QGridLayout(permissionsGroupBox);
 
         m_defaultPermissonsCheckBox = new QCheckBox(this);
-        m_defaultPermissonsCheckBox->setText(tr("Include default permissions and features for Qt modules."));
-        m_defaultPermissonsCheckBox->setTristate(true);
+        m_defaultPermissonsCheckBox->setText(tr("Include default permissions for Qt modules."));
         layout->addWidget(m_defaultPermissonsCheckBox, 0, 0);
+
+        m_defaultFeaturesCheckBox = new QCheckBox(this);
+        m_defaultFeaturesCheckBox->setText(tr("Include default features for Qt modules."));
+        layout->addWidget(m_defaultFeaturesCheckBox, 1, 0);
 
         m_permissionsModel = new PermissionsModel(this);
 
         m_permissionsListView = new QListView(permissionsGroupBox);
         m_permissionsListView->setModel(m_permissionsModel);
         m_permissionsListView->setMinimumSize(QSize(0, 200));
-        layout->addWidget(m_permissionsListView, 1, 0, 3, 1);
+        layout->addWidget(m_permissionsListView, 2, 0, 3, 1);
 
         m_removePermissionButton = new QPushButton(permissionsGroupBox);
         m_removePermissionButton->setText(tr("Remove"));
-        layout->addWidget(m_removePermissionButton, 1, 1);
+        layout->addWidget(m_removePermissionButton, 2, 1);
 
         m_permissionsComboBox = new QComboBox(permissionsGroupBox);
         m_permissionsComboBox->insertItems(0, QStringList()
@@ -435,16 +436,18 @@ void AndroidManifestEditorWidget::initializePage()
          << QLatin1String("android.permission.WRITE_USER_DICTIONARY")
         );
         m_permissionsComboBox->setEditable(true);
-        layout->addWidget(m_permissionsComboBox, 5, 0);
+        layout->addWidget(m_permissionsComboBox, 6, 0);
 
         m_addPermissionButton = new QPushButton(permissionsGroupBox);
         m_addPermissionButton->setText(tr("Add"));
-        layout->addWidget(m_addPermissionButton, 5, 1);
+        layout->addWidget(m_addPermissionButton, 6, 1);
 
         permissionsGroupBox->setLayout(layout);
 
         connect(m_defaultPermissonsCheckBox, SIGNAL(stateChanged(int)),
-                this, SLOT(defaultPermissionCheckBoxClicked()));
+                this, SLOT(defaultPermissionOrFeatureCheckBoxClicked()));
+        connect(m_defaultFeaturesCheckBox, SIGNAL(stateChanged(int)),
+                this, SLOT(defaultPermissionOrFeatureCheckBoxClicked()));
 
         connect(m_addPermissionButton, SIGNAL(clicked()),
                 this, SLOT(addPermission()));
@@ -715,7 +718,9 @@ void AndroidManifestEditorWidget::updateInfoBar(const QString &errorMessage, int
     else
         text = tr("%2: Could not parse file: \"%1\".").arg(errorMessage).arg(line);
     Core::InfoBarEntry infoBarEntry(infoBarId, text);
-    infoBarEntry.setCustomButtonInfo(tr("Goto error"), this, SLOT(gotoError()));
+    infoBarEntry.setCustomButtonInfo(tr("Goto error"), [this]() {
+        m_textEditorWidget->gotoLine(m_errorLine, m_errorColumn);
+    });
     infoBar->removeInfo(infoBarId);
     infoBar->addInfo(infoBarEntry);
 
@@ -729,11 +734,6 @@ void AndroidManifestEditorWidget::hideInfoBar()
     Core::InfoBar *infoBar = m_textEditorWidget->textDocument()->infoBar();
         infoBar->removeInfo(infoBarId);
     m_timerParseCheck.stop();
-}
-
-void AndroidManifestEditorWidget::gotoError()
-{
-    m_textEditorWidget->gotoLine(m_errorLine, m_errorColumn);
 }
 
 void setApiLevel(QComboBox *box, const QDomElement &element, const QString &attribute)
@@ -806,9 +806,12 @@ void AndroidManifestEditorWidget::syncToWidgets(const QDomDocument &doc)
     m_hIconPath.clear();
 
     disconnect(m_defaultPermissonsCheckBox, SIGNAL(stateChanged(int)),
-            this, SLOT(defaultPermissionCheckBoxClicked()));
+            this, SLOT(defaultPermissionOrFeatureCheckBoxClicked()));
+    disconnect(m_defaultFeaturesCheckBox, SIGNAL(stateChanged(int)),
+            this, SLOT(defaultPermissionOrFeatureCheckBoxClicked()));
 
     m_defaultPermissonsCheckBox->setChecked(false);
+    m_defaultFeaturesCheckBox->setChecked(false);
     QDomNodeList manifestChilds = manifest.childNodes();
     bool foundPermissionComment = false;
     bool foundFeatureComment = false;
@@ -823,10 +826,13 @@ void AndroidManifestEditorWidget::syncToWidgets(const QDomDocument &doc)
         }
     }
 
-    m_defaultPermissonsCheckBox->setCheckState(Qt::CheckState(foundFeatureComment + foundPermissionComment));
+    m_defaultPermissonsCheckBox->setChecked(foundPermissionComment);
+    m_defaultFeaturesCheckBox->setChecked(foundFeatureComment);
 
     connect(m_defaultPermissonsCheckBox, SIGNAL(stateChanged(int)),
-            this, SLOT(defaultPermissionCheckBoxClicked()));
+            this, SLOT(defaultPermissionOrFeatureCheckBoxClicked()));
+    connect(m_defaultFeaturesCheckBox, SIGNAL(stateChanged(int)),
+            this, SLOT(defaultPermissionOrFeatureCheckBoxClicked()));
 
     QStringList permissions;
     QDomElement permissionElem = manifest.firstChildElement(QLatin1String("uses-permission"));
@@ -968,7 +974,7 @@ void AndroidManifestEditorWidget::parseManifest(QXmlStreamReader &reader, QXmlSt
             if (!foundPermissionComment && m_defaultPermissonsCheckBox->checkState() == Qt::Checked)
                 writer.writeComment(QLatin1String(" %%INSERT_PERMISSIONS "));
 
-            if (!foundFeatureComment && m_defaultPermissonsCheckBox->checkState() == Qt::Checked)
+            if (!foundFeatureComment && m_defaultFeaturesCheckBox->checkState() == Qt::Checked)
                 writer.writeComment(QLatin1String(" %%INSERT_FEATURES "));
 
             if (!permissions.isEmpty()) {
@@ -1184,16 +1190,18 @@ QString AndroidManifestEditorWidget::parseUsesPermission(QXmlStreamReader &reade
 QString AndroidManifestEditorWidget::parseComment(QXmlStreamReader &reader, QXmlStreamWriter &writer)
 {
     QString commentText = reader.text().toString().trimmed();
-    if (commentText == QLatin1String("%%INSERT_PERMISSIONS")
-            || commentText == QLatin1String("%%INSERT_FEATURES")) {
+    if (commentText == QLatin1String("%%INSERT_PERMISSIONS")) {
         if (m_defaultPermissonsCheckBox->checkState() == Qt::Unchecked)
             return commentText;
-
-        writer.writeCurrentToken(reader);
-        return commentText;
     }
+
+    if (commentText == QLatin1String("%%INSERT_FEATURES")) {
+        if (m_defaultFeaturesCheckBox->checkState() == Qt::Unchecked)
+            return commentText;
+    }
+
     writer.writeCurrentToken(reader);
-    return QString();
+    return commentText;
 }
 
 void AndroidManifestEditorWidget::parseUnknownElement(QXmlStreamReader &reader, QXmlStreamWriter &writer)
@@ -1294,10 +1302,8 @@ void AndroidManifestEditorWidget::setHDPIIcon()
     setDirty(true);
 }
 
-void AndroidManifestEditorWidget::defaultPermissionCheckBoxClicked()
+void AndroidManifestEditorWidget::defaultPermissionOrFeatureCheckBoxClicked()
 {
-    if (m_defaultPermissonsCheckBox->checkState() == Qt::PartiallyChecked)
-        m_defaultPermissonsCheckBox->setChecked(true);
     setDirty(true);
 }
 
@@ -1423,9 +1429,9 @@ int PermissionsModel::rowCount(const QModelIndex &parent) const
 
 
 AndroidManifestTextEditorWidget::AndroidManifestTextEditorWidget(AndroidManifestEditorWidget *parent)
-    : TextEditor::BaseTextEditorWidget(new AndroidManifestDocument(parent), parent),
-      m_parent(parent)
+    : TextEditor::BaseTextEditorWidget(parent)
 {
+    setTextDocument(TextEditor::BaseTextDocumentPtr(new AndroidManifestDocument(parent)));
     setupAsPlainEditor();
     textDocument()->setMimeType(QLatin1String(Constants::ANDROID_MANIFEST_MIME_TYPE));
 }

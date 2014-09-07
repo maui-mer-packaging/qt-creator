@@ -30,48 +30,31 @@
 #include "formeditorfactory.h"
 #include "formeditorw.h"
 #include "formwindoweditor.h"
-#include "editordata.h"
-#include "designerxmleditorwidget.h"
 
 #include <coreplugin/coreconstants.h>
-#include <coreplugin/icore.h>
-#include <coreplugin/infobar.h>
 #include <coreplugin/fileiconprovider.h>
-#include <coreplugin/modemanager.h>
 
 #include <QCoreApplication>
 #include <QDebug>
 
+using namespace Core;
 using namespace Designer::Constants;
 
 namespace Designer {
 namespace Internal {
 
 FormEditorFactory::FormEditorFactory()
-  : Core::IEditorFactory(Core::ICore::instance())
 {
     setId(K_DESIGNER_XML_EDITOR_ID);
     setDisplayName(qApp->translate("Designer", C_DESIGNER_XML_DISPLAY_NAME));
     addMimeType(FORM_MIMETYPE);
 
-    Core::FileIconProvider::registerIconOverlayForSuffix(":/formeditor/images/qt_ui.png", "ui");
+    FileIconProvider::registerIconOverlayForSuffix(":/formeditor/images/qt_ui.png", "ui");
 }
 
-Core::IEditor *FormEditorFactory::createEditor()
+IEditor *FormEditorFactory::createEditor()
 {
-    const EditorData data = FormEditorW::instance()->createEditor();
-    if (data.formWindowEditor) {
-        Core::InfoBarEntry info(Core::Id(Constants::INFO_READ_ONLY),
-                                tr("This file can only be edited in <b>Design</b> mode."));
-        info.setCustomButtonInfo(tr("Switch Mode"), this, SLOT(designerModeClicked()));
-        data.formWindowEditor->document()->infoBar()->addInfo(info);
-    }
-    return data.formWindowEditor;
-}
-
-void FormEditorFactory::designerModeClicked()
-{
-    Core::ModeManager::activateMode(Core::Constants::MODE_DESIGN);
+    return FormEditorW::createEditor();
 }
 
 } // namespace Internal

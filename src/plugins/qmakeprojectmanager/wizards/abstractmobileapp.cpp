@@ -52,7 +52,7 @@ AbstractGeneratedFileInfo::AbstractGeneratedFileInfo()
 }
 
 const QString AbstractMobileApp::CFileComment(QLatin1String("//"));
-const QString AbstractMobileApp::ProFileComment(QLatin1String("#"));
+const QString AbstractMobileApp::ProFileComment(QLatin1Char('#'));
 const QString AbstractMobileApp::DeploymentPriFileName(QLatin1String("deployment.pri"));
 const QString AbstractMobileApp::FileChecksum(QLatin1String("checksum"));
 const QString AbstractMobileApp::FileStubVersion(QLatin1String("version"));
@@ -181,7 +181,7 @@ QByteArray AbstractMobileApp::generateProFile(QString *errorMessage) const
                 folders.append(folderName);
             }
             if (foldersCount > 0)
-                out << "DEPLOYMENTFOLDERS = " << folders.join(QLatin1String(" ")) << endl;
+                out << "DEPLOYMENTFOLDERS = " << folders.join(QLatin1Char(' ')) << endl;
         } else if (line.contains(QLatin1String("# REMOVE_NEXT_LINE"))) {
             in.readLine(); // eats the following line
         } else {

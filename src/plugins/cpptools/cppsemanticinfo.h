@@ -45,28 +45,25 @@ class CPPTOOLS_EXPORT SemanticInfo
 public:
     struct Source
     {
-        const CPlusPlus::Snapshot snapshot;
         const QString fileName;
         const QByteArray code;
-        const int line;
-        const int column;
         const unsigned revision;
+        CPlusPlus::Snapshot snapshot;
         const bool force;
 
-        Source()
-            : line(0), column(0), revision(0), force(false)
-        { }
+        Source() : revision(0), force(false) {}
 
-        Source(const CPlusPlus::Snapshot &snapshot,
-               const QString &fileName,
+        Source(const QString &fileName,
                const QByteArray &code,
-               int line, int column,
                unsigned revision,
+               const CPlusPlus::Snapshot &snapshot,
                bool force)
-            : snapshot(snapshot), fileName(fileName),
-              code(code), line(line), column(column),
-              revision(revision), force(force)
-        { }
+            : fileName(fileName)
+            , code(code)
+            , revision(revision)
+            , snapshot(snapshot)
+            , force(force)
+        {}
     };
 
 public:
@@ -78,10 +75,12 @@ public:
     SemanticInfo();
 
     unsigned revision;
-    bool forced;
     bool complete;
     CPlusPlus::Snapshot snapshot;
     CPlusPlus::Document::Ptr doc;
+
+    // Widget specific (e.g. related to cursor position)
+    bool localUsesUpdated;
     LocalUseMap localUses;
 };
 

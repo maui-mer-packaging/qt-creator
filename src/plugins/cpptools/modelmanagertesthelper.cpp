@@ -29,9 +29,13 @@
 
 #include "modelmanagertesthelper.h"
 
+#include "cppworkingcopy.h"
+
 #include <QtTest>
 
 #include <cassert>
+
+Q_DECLARE_METATYPE(QSet<QString>)
 
 using namespace CppTools::Internal;
 
@@ -40,6 +44,7 @@ TestProject::TestProject(const QString &name, QObject *parent)
 {
     setParent(parent);
     setId(Core::Id::fromString(name));
+    qRegisterMetaType<QSet<QString> >();
 }
 
 TestProject::~TestProject()
@@ -53,9 +58,12 @@ ModelManagerTestHelper::ModelManagerTestHelper(QObject *parent) :
     CppModelManager *mm = CppModelManager::instance();
     assert(mm);
 
-    connect(this, SIGNAL(aboutToRemoveProject(ProjectExplorer::Project*)), mm, SLOT(onAboutToRemoveProject(ProjectExplorer::Project*)));
-    connect(this, SIGNAL(projectAdded(ProjectExplorer::Project*)), mm, SLOT(onProjectAdded(ProjectExplorer::Project*)));
-    connect(mm, SIGNAL(sourceFilesRefreshed(QStringList)), this, SLOT(sourceFilesRefreshed(QStringList)));
+    connect(this, SIGNAL(aboutToRemoveProject(ProjectExplorer::Project*)),
+            mm, SLOT(onAboutToRemoveProject(ProjectExplorer::Project*)));
+    connect(this, SIGNAL(projectAdded(ProjectExplorer::Project*)),
+            mm, SLOT(onProjectAdded(ProjectExplorer::Project*)));
+    connect(mm, SIGNAL(sourceFilesRefreshed(QSet<QString>)),
+            this, SLOT(sourceFilesRefreshed(QSet<QString>)));
     connect(mm, SIGNAL(gcFinished()), this, SLOT(gcFinished()));
 
     cleanup();
@@ -108,7 +116,7 @@ void ModelManagerTestHelper::resetRefreshedSourceFiles()
     m_refreshHappened = false;
 }
 
-QStringList ModelManagerTestHelper::waitForRefreshedSourceFiles()
+QSet<QString> ModelManagerTestHelper::waitForRefreshedSourceFiles()
 {
     while (!m_refreshHappened)
         QCoreApplication::processEvents();
@@ -124,7 +132,7 @@ void ModelManagerTestHelper::waitForFinishedGc()
         QCoreApplication::processEvents();
 }
 
-void ModelManagerTestHelper::sourceFilesRefreshed(const QStringList &files)
+void ModelManagerTestHelper::sourceFilesRefreshed(const QSet<QString> &files)
 {
     m_lastRefreshedSourceFiles = files;
     m_refreshHappened = true;

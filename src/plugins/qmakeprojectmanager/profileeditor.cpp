@@ -29,58 +29,41 @@
 
 #include "profileeditor.h"
 
-#include "profilehighlighter.h"
-#include "qmakeprojectmanagerconstants.h"
-#include "profileeditorfactory.h"
 #include "profilecompletionassist.h"
+#include "profilehighlighter.h"
+#include "qmakeprojectmanager.h"
+#include "qmakeprojectmanagerconstants.h"
+#include "qmakeprojectmanagerconstants.h"
 
+#include <coreplugin/fileiconprovider.h>
 #include <extensionsystem/pluginmanager.h>
-
-#include <texteditor/fontsettings.h>
+#include <qtsupport/qtsupportconstants.h>
 #include <texteditor/texteditoractionhandler.h>
-#include <texteditor/texteditorsettings.h>
+#include <utils/qtcassert.h>
 
+#include <QCoreApplication>
 #include <QFileInfo>
 #include <QDir>
-#include <QSharedPointer>
 #include <QTextBlock>
+
+using namespace TextEditor;
 
 namespace QmakeProjectManager {
 namespace Internal {
 
-//
-// ProFileEditor
-//
-
-ProFileEditor::ProFileEditor(ProFileEditorWidget *editor)
-  : BaseTextEditor(editor)
+class ProFileEditorWidget : public BaseTextEditorWidget
 {
-    setContext(Core::Context(Constants::C_PROFILEEDITOR,
-              TextEditor::Constants::C_TEXTEDITOR));
-    setDuplicateSupported(true);
-    setCommentStyle(Utils::CommentDefinition::HashStyle);
-    setCompletionAssistProvider(ExtensionSystem::PluginManager::getObject<ProFileCompletionAssistProvider>());
-}
+public:
+    ProFileEditorWidget()
+    {
+        setCompletionAssistProvider(ExtensionSystem::PluginManager::getObject<ProFileCompletionAssistProvider>());
+    }
 
-Core::IEditor *ProFileEditor::duplicate()
-{
-    ProFileEditorWidget *ret = new ProFileEditorWidget(
-                qobject_cast<ProFileEditorWidget*>(editorWidget()));
-    TextEditor::TextEditorSettings::initializeEditor(ret);
-    return ret->editor();
-}
-
-//
-// ProFileEditorWidget
-//
-
-ProFileEditorWidget::ProFileEditorWidget(QWidget *parent)
-    : BaseTextEditorWidget(new ProFileDocument(), parent)
-{}
-
-ProFileEditorWidget::ProFileEditorWidget(ProFileEditorWidget *other)
-    : BaseTextEditorWidget(other)
-{}
+protected:
+    virtual Link findLinkAt(const QTextCursor &, bool resolveTarget = true,
+                            bool inNextSplit = false);
+    void contextMenuEvent(QContextMenuEvent *);
+};
 
 static bool isValidFileNameChar(const QChar &c)
 {
@@ -170,11 +153,6 @@ ProFileEditorWidget::Link ProFileEditorWidget::findLinkAt(const QTextCursor &cur
     return link;
 }
 
-TextEditor::BaseTextEditor *ProFileEditorWidget::createEditor()
-{
-    return new ProFileEditor(this);
-}
-
 void ProFileEditorWidget::contextMenuEvent(QContextMenuEvent *e)
 {
     showDefaultContextMenu(e, Constants::M_CONTEXT);
@@ -184,8 +162,19 @@ void ProFileEditorWidget::contextMenuEvent(QContextMenuEvent *e)
 // ProFileDocument
 //
 
+class ProFileDocument : public BaseTextDocument
+{
+public:
+    ProFileDocument();
+    QString defaultPath() const;
+    QString suggestedFileName() const;
+
+    // qmake project files doesn't support UTF8-BOM
+    // If the BOM would be added qmake would fail and QtCreator couldn't parse the project file
+    bool supportsUtf8Bom() { return false; }
+};
+
 ProFileDocument::ProFileDocument()
-        : TextEditor::BaseTextDocument()
 {
     setId(Constants::PROFILE_EDITOR_ID);
     setMimeType(QLatin1String(Constants::PROFILE_MIMETYPE));
@@ -202,6 +191,33 @@ QString ProFileDocument::suggestedFileName() const
 {
     QFileInfo fi(filePath());
     return fi.fileName();
+}
+
+//
+// ProFileEditorFactory
+//
+
+ProFileEditorFactory::ProFileEditorFactory()
+{
+    setId(Constants::PROFILE_EDITOR_ID);
+    setDisplayName(qApp->translate("OpenWith::Editors", Constants::PROFILE_EDITOR_DISPLAY_NAME));
+    addMimeType(Constants::PROFILE_MIMETYPE);
+    addMimeType(Constants::PROINCLUDEFILE_MIMETYPE);
+    addMimeType(Constants::PROFEATUREFILE_MIMETYPE);
+    addMimeType(Constants::PROCONFIGURATIONFILE_MIMETYPE);
+    addMimeType(Constants::PROCACHEFILE_MIMETYPE);
+    addMimeType(Constants::PROSTASHFILE_MIMETYPE);
+
+    setDocumentCreator([]() { return new ProFileDocument; });
+    setEditorWidgetCreator([]() { return new ProFileEditorWidget; });
+
+    setCommentStyle(Utils::CommentDefinition::HashStyle);
+    setEditorActionHandlers(TextEditorActionHandler::UnCommentSelection
+                | TextEditorActionHandler::JumpToFileUnderCursor);
+
+    Core::FileIconProvider::registerIconOverlayForSuffix(QtSupport::Constants::ICON_QT_PROJECT, "pro");
+    Core::FileIconProvider::registerIconOverlayForSuffix(QtSupport::Constants::ICON_QT_PROJECT, "pri");
+    Core::FileIconProvider::registerIconOverlayForSuffix(QtSupport::Constants::ICON_QT_PROJECT, "prf");
 }
 
 } // namespace Internal

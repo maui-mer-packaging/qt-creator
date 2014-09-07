@@ -157,7 +157,7 @@ QList<Core::GeneratedFile>  PluginGenerator::generatePlugin(const GenerationPara
         if (wo.sourceType == PluginOptions::WidgetOptions::LinkLibrary)
             widgetLibraries.insert(QLatin1String("-l") + wo.widgetLibrary);
         else
-            widgetProjects.insert(QLatin1String("include(") + wo.widgetProjectFile + QLatin1String(")"));
+            widgetProjects.insert(QLatin1String("include(") + wo.widgetProjectFile + QLatin1Char(')'));
         pluginIncludes += QLatin1String("#include \"") + wo.pluginHeaderFile + QLatin1String("\"\n");
         pluginAdditions +=
             QLatin1String("    m_widgets.append(new ") + wo.pluginClassName + QLatin1String("(this));\n");
@@ -295,8 +295,8 @@ QList<Core::GeneratedFile>  PluginGenerator::generatePlugin(const GenerationPara
     sm.insert(QLatin1String("PLUGIN_HEADERS"), pluginHeaders);
     sm.insert(QLatin1String("PLUGIN_SOURCES"), pluginSources);
     sm.insert(QLatin1String("PLUGIN_RESOURCES"), options.resourceFile);
-    sm.insert(QLatin1String("WIDGET_LIBS"), QStringList(widgetLibraries.toList()).join(QString(blank)));
-    sm.insert(QLatin1String("INCLUSIONS"), QStringList(widgetProjects.toList()).join(QLatin1String("\n")));
+    sm.insert(QLatin1String("WIDGET_LIBS"), QStringList(widgetLibraries.toList()).join(blank));
+    sm.insert(QLatin1String("INCLUSIONS"), QStringList(widgetProjects.toList()).join(QLatin1Char('\n')));
     const QString proFileContents = processTemplate(p.templatePath + QLatin1String("/tpl_plugin.pro"), sm, errorMessage);
     if (proFileContents.isEmpty())
         return QList<Core::GeneratedFile>();

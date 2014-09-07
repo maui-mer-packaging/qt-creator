@@ -52,6 +52,7 @@ QtcPlugin {
         "cppquickfixes.cpp", "cppquickfixes.h",
         "cppsnippetprovider.cpp", "cppsnippetprovider.h",
         "cpptypehierarchy.cpp", "cpptypehierarchy.h",
+        "cppuseselectionsupdater.cpp", "cppuseselectionsupdater.h",
         "cppvirtualfunctionassistprovider.cpp", "cppvirtualfunctionassistprovider.h",
         "cppvirtualfunctionproposalitem.cpp", "cppvirtualfunctionproposalitem.h",
     ]
@@ -65,6 +66,7 @@ QtcPlugin {
             "cppincludehierarchy_test.cpp",
             "cppquickfix_test.cpp",
             "cppquickfix_test.h",
+            "cppuseselections_test.cpp",
             "fileandtokenactions_test.cpp",
             "followsymbol_switchmethoddecldef_test.cpp",
         ]

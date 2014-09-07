@@ -388,7 +388,7 @@ void QmlLiveTextPreview::associateEditor(Core::IEditor *editor)
     using namespace TextEditor;
     if (editor->document()->id() == QmlJSEditor::Constants::C_QMLJSEDITOR_ID) {
         QTC_ASSERT(QLatin1String(editor->widget()->metaObject()->className()) ==
-                   QLatin1String("QmlJSEditor::Internal::QmlJSTextEditorWidget"),
+                   QLatin1String("QmlJSEditor::Internal::QmlJSEditorWidget"),
                    return);
 
         BaseTextEditorWidget *editWidget
@@ -718,17 +718,13 @@ void QmlLiveTextPreview::showSyncWarning(
             Core::InfoBarEntry info(Core::Id(INFO_OUT_OF_SYNC), errorMessage);
             BaseToolsClient *toolsClient = m_inspectorAdapter->toolsClient();
             if (toolsClient && toolsClient->supportReload())
-                info.setCustomButtonInfo(tr("Reload QML"), this,
-                                         SLOT(reloadQml()));
+                info.setCustomButtonInfo(tr("Reload QML"), [this]() {
+                    removeOutofSyncInfo();
+                    emit reloadRequest();
+                });
             infoBar->addInfo(info);
         }
     }
-}
-
-void QmlLiveTextPreview::reloadQml()
-{
-    removeOutofSyncInfo();
-    emit reloadRequest();
 }
 
 void QmlLiveTextPreview::removeOutofSyncInfo()

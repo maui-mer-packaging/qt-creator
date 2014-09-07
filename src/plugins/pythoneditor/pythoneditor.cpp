@@ -27,49 +27,58 @@
 **
 ****************************************************************************/
 
-/**
-  \class PyEditor::Editor implements interface Core::IEditor
-  This editor makes possible to edit Python source files
-  */
-
 #include "pythoneditor.h"
 #include "pythoneditorconstants.h"
 #include "pythoneditorplugin.h"
-#include "pythoneditorwidget.h"
+#include "tools/pythonindenter.h"
+#include "tools/pythonhighlighter.h"
 
-#include <coreplugin/icore.h>
-#include <coreplugin/mimedatabase.h>
+#include <texteditor/texteditoractionhandler.h>
 #include <texteditor/texteditorconstants.h>
-#include <texteditor/texteditorsettings.h>
+#include <texteditor/basetextdocument.h>
 
-#include <QFileInfo>
+#include <utils/qtcassert.h>
+
+using namespace TextEditor;
 
 namespace PythonEditor {
 namespace Internal {
 
-PythonEditor::PythonEditor(PythonEditorWidget *editorWidget)
-    :BaseTextEditor(editorWidget)
+//
+//  PythonEditorWidget
+//
+
+class PythonEditorWidget : public BaseTextEditorWidget
 {
-    setContext(Core::Context(Constants::C_PYTHONEDITOR_ID,
-                             TextEditor::Constants::C_TEXTEDITOR));
-    setDuplicateSupported(true);
+public:
+    PythonEditorWidget()
+    {
+        setParenthesesMatchingEnabled(true);
+        setMarksVisible(true);
+        setCodeFoldingSupported(true);
+    }
+};
+
+
+//
+//  PythonEditorFactory
+//
+
+PythonEditorFactory::PythonEditorFactory()
+{
+    setId(Constants::C_PYTHONEDITOR_ID);
+    setDisplayName(tr(Constants::C_EDITOR_DISPLAY_NAME));
+    addMimeType(QLatin1String(Constants::C_PY_MIMETYPE));
+
+    setEditorActionHandlers(TextEditorActionHandler::Format
+                       | TextEditorActionHandler::UnCommentSelection
+                       | TextEditorActionHandler::UnCollapseAll);
+
+    setDocumentCreator([]() { return new BaseTextDocument(Constants::C_PYTHONEDITOR_ID); });
+    setEditorWidgetCreator([]() { return new PythonEditorWidget; });
+    setIndenterCreator([]() { return new PythonIndenter; });
+    setSyntaxHighlighterCreator([]() { return new PythonHighlighter; });
     setCommentStyle(Utils::CommentDefinition::HashStyle);
-}
-
-Core::IEditor *PythonEditor::duplicate()
-{
-    PythonEditorWidget *widget = new PythonEditorWidget(qobject_cast<PythonEditorWidget *>(editorWidget()));
-    TextEditor::TextEditorSettings::initializeEditor(widget);
-    return widget->editor();
-}
-
-bool PythonEditor::open(QString *errorString,
-                        const QString &fileName,
-                        const QString &realFileName)
-{
-    Core::MimeType mimeType = Core::MimeDatabase::findByFile(QFileInfo(fileName));
-    textDocument()->setMimeType(mimeType.type());
-    return TextEditor::BaseTextEditor::open(errorString, fileName, realFileName);
 }
 
 } // namespace Internal

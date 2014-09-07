@@ -32,10 +32,9 @@
 
 #include <QtGlobal>
 
-namespace GLSLEditor {
+namespace GlslEditor {
 namespace Constants {
 
-// menus
 const char M_CONTEXT[] = "GLSL Editor.ContextMenu";
 const char M_TOOLS_GLSL[] = "GLSLEditor.Tools.Menu";
 
@@ -54,6 +53,6 @@ const char WIZARD_CATEGORY_GLSL[] = "U.GLSL";
 const char WIZARD_TR_CATEGORY_GLSL[] = QT_TRANSLATE_NOOP("GLSLEditor", "GLSL");
 
 } // namespace Constants
-} // namespace GLSLEditor
+} // namespace GlslEditor
 
 #endif // GLSLEDITOR_CONSTANTS_H

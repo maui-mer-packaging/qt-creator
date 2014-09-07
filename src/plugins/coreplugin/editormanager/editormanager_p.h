@@ -82,6 +82,9 @@ public:
                                               EditorManager::OpenEditorFlags flags = 0);
     static void activateEditorForEntry(EditorView *view, DocumentModel::Entry *entry,
                                        EditorManager::OpenEditorFlags flags = EditorManager::NoFlags);
+    /* closes the document if there is no other editor on the document visible */
+    static void closeEditorOrDocument(IEditor *editor);
+
     static EditorView *viewForEditor(IEditor *editor);
     static void setCurrentView(EditorView *view);
 
@@ -107,11 +110,12 @@ public:
 
     static void updateWindowTitleForDocument(IDocument *document, QWidget *window);
 
+    static void vcsOpenCurrentEditor();
+    static void makeCurrentEditorWritable();
+
 public slots:
     static bool saveDocument(Core::IDocument *document);
     static bool saveDocumentAs(Core::IDocument *document);
-    static void makeCurrentEditorWritable();
-    static void vcsOpenCurrentEditor();
 
     static void split(Qt::Orientation orientation);
     static void removeAllSplits();
@@ -127,6 +131,8 @@ private slots:
     static void autoSave();
     static void handleContextChange(const QList<Core::IContext *> &context);
 
+    static void copyFilePathFromContextMenu();
+    static void copyFileNameFromContextMenu();
     static void saveDocumentFromContextMenu();
     static void saveDocumentAsFromContextMenu();
     static void revertToSavedFromContextMenu();
@@ -161,7 +167,6 @@ private:
     static IEditor *pickUnusedEditor(Internal::EditorView **foundView = 0);
     static void addDocumentToRecentFiles(IDocument *document);
     static void updateAutoSave();
-    static void setCloseSplitEnabled(Internal::SplitterOrView *splitterOrView, bool enable);
     static void updateMakeWritableWarning();
     static void setupSaveActions(IDocument *document, QAction *saveAction,
                                  QAction *saveAsAction, QAction *revertToSavedAction);
@@ -198,6 +203,8 @@ private:
     QAction *m_removeAllSplitsAction;
     QAction *m_gotoNextSplitAction;
 
+    QAction *m_copyFilePathContextAction;
+    QAction *m_copyFileNameContextAction;
     QAction *m_saveCurrentEditorContextAction;
     QAction *m_saveAsCurrentEditorContextAction;
     QAction *m_revertToSavedCurrentEditorContextAction;
@@ -210,6 +217,7 @@ private:
     QAction *m_openTerminalAction;
     QAction *m_findInDirectoryAction;
     DocumentModel::Entry *m_contextMenuEntry;
+    IEditor *m_contextMenuEditor;
 
     OpenEditorsWindow *m_windowPopup;
     EditorClosingCoreListener *m_coreListener;

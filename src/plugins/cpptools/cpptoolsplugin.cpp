@@ -139,8 +139,10 @@ bool CppToolsPlugin::initialize(const QStringList &arguments, QString *error)
     CppModelManager *modelManager = CppModelManager::instance();
     connect(VcsManager::instance(), SIGNAL(repositoryChanged(QString)),
             modelManager, SLOT(updateModifiedSourceFiles()));
-    connect(DocumentManager::instance(), SIGNAL(filesChangedInternally(QStringList)),
-            modelManager, SLOT(updateSourceFiles(QStringList)));
+    connect(DocumentManager::instance(), &DocumentManager::filesChangedInternally,
+            [=](const QStringList &files) {
+        modelManager->updateSourceFiles(files.toSet());
+    });
 
     CppLocatorData *locatorData = new CppLocatorData;
     connect(modelManager, SIGNAL(documentUpdated(CPlusPlus::Document::Ptr)),
@@ -168,7 +170,7 @@ bool CppToolsPlugin::initialize(const QStringList &arguments, QString *error)
     mtools->addMenu(mcpptools);
 
     // Actions
-    Context context(CppEditor::Constants::C_CPPEDITOR);
+    Context context(CppEditor::Constants::CPPEDITOR_ID);
 
     QAction *switchAction = new QAction(tr("Switch Header/Source"), this);
     Command *command = ActionManager::registerAction(switchAction, Constants::SWITCH_HEADER_SOURCE, context, true);
@@ -433,8 +435,8 @@ QString correspondingHeaderOrSource(const QString &fileName, bool *wasHeader)
     // Find files in other projects
     } else {
         CppModelManager *modelManager = CppModelManager::instance();
-        QList<CppModelManagerInterface::ProjectInfo> projectInfos = modelManager->projectInfos();
-        foreach (const CppModelManagerInterface::ProjectInfo &projectInfo, projectInfos) {
+        QList<ProjectInfo> projectInfos = modelManager->projectInfos();
+        foreach (const ProjectInfo &projectInfo, projectInfos) {
             const ProjectExplorer::Project *project = projectInfo.project().data();
             if (project == currentProject)
                 continue; // We have already checked the current project.
@@ -449,5 +451,3 @@ QString correspondingHeaderOrSource(const QString &fileName, bool *wasHeader)
 }
 
 } // namespace CppTools
-
-Q_EXPORT_PLUGIN(CppTools::Internal::CppToolsPlugin)

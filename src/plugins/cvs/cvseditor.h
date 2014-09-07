@@ -37,13 +37,12 @@
 namespace Cvs {
 namespace Internal {
 
-class CvsEditor : public VcsBase::VcsBaseEditorWidget
+class CvsEditorWidget : public VcsBase::VcsBaseEditorWidget
 {
     Q_OBJECT
 
 public:
-    explicit CvsEditor(const VcsBase::VcsBaseEditorParameters *type,
-                            QWidget *parent);
+    CvsEditorWidget();
 
 private:
     QSet<QString> annotationChanges() const;

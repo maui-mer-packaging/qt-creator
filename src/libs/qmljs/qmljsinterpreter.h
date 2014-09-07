@@ -156,10 +156,10 @@ public:
     virtual bool getSourceLocation(QString *fileName, int *line, int *column) const;
 };
 
-template <typename _RetTy> const _RetTy *value_cast(const Value *)
+template <typename RetTy> const RetTy *value_cast(const Value *)
 {
     // Produce a good error message if a specialization is missing.
-    _RetTy::ERROR_MissingValueCastSpecialization();
+    RetTy::ERROR_MissingValueCastSpecialization();
     return 0;
 }
 
@@ -1011,7 +1011,7 @@ public:
     // Other: non-absolute path
     QString name() const;
 
-    // LibraryImport: uri with QDir::separator separator
+    // LibraryImport: uri with '/' separator
     // Other: absoluteFilePath
     QString path() const;
 
@@ -1088,7 +1088,7 @@ public:
     QString nameForImportedObject(const ObjectValue *value, const Context *context) const;
     bool importFailed() const;
 
-    QList<Import> all() const;
+    const QList<Import> &all() const;
 
     const TypeScope *typeScope() const;
     const JSImportScope *jsImportScope() const;

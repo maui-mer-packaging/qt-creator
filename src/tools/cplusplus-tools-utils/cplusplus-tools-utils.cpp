@@ -57,7 +57,7 @@ void executeCommand(const QString &command, const QStringList &arguments, const 
         exit(EXIT_FAILURE);
     }
 
-    const QString fullCommand = command + QLatin1Char(' ') + arguments.join(QLatin1String(" "));
+    const QString fullCommand = command + QLatin1Char(' ') + arguments.join(QLatin1Char(' '));
     if (verbose)
         out << "Executing: " << fullCommand << endl;
 
@@ -103,7 +103,7 @@ SystemPreprocessor::SystemPreprocessor(bool verbose)
             = Utils::Environment::systemEnvironment().searchInPath(i.key());
         if (!executablePath.isEmpty()) {
             m_compiler = i.key();
-            m_compilerArguments = i.value().split(QLatin1String(" "), QString::SkipEmptyParts);
+            m_compilerArguments = i.value().split(QLatin1Char(' '), QString::SkipEmptyParts);
             m_compilerArguments
                 << QDir::toNativeSeparators(QLatin1String(PATH_PREPROCESSOR_CONFIG));
             break;

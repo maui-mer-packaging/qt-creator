@@ -45,8 +45,7 @@ namespace Git {
 namespace Internal {
 
 // ------------------
-GitSubmitEditorWidget::GitSubmitEditorWidget(QWidget *parent) :
-    VcsBase::SubmitEditorWidget(parent),
+GitSubmitEditorWidget::GitSubmitEditorWidget() :
     m_pushAction(NoPush),
     m_gitSubmitPanel(new QWidget),
     m_logChangeWidget(0),
@@ -127,8 +126,12 @@ void GitSubmitEditorWidget::refreshLog(const QString &repository)
 GitSubmitEditorPanelData GitSubmitEditorWidget::panelData() const
 {
     GitSubmitEditorPanelData rc;
-    rc.author = m_gitSubmitPanelUi.authorLineEdit->text();
-    rc.email = m_gitSubmitPanelUi.emailLineEdit->text();
+    const QString author = m_gitSubmitPanelUi.authorLineEdit->text();
+    const QString email = m_gitSubmitPanelUi.emailLineEdit->text();
+    if (author != m_originalAuthor || email != m_originalEmail) {
+        rc.author = author;
+        rc.email = email;
+    }
     rc.bypassHooks = m_gitSubmitPanelUi.bypassHooksCheckBox->isChecked();
     rc.pushAction = m_pushAction;
     return rc;
@@ -136,6 +139,8 @@ GitSubmitEditorPanelData GitSubmitEditorWidget::panelData() const
 
 void GitSubmitEditorWidget::setPanelData(const GitSubmitEditorPanelData &data)
 {
+    m_originalAuthor = data.author;
+    m_originalEmail = data.email;
     m_gitSubmitPanelUi.authorLineEdit->setText(data.author);
     m_gitSubmitPanelUi.emailLineEdit->setText(data.email);
     m_gitSubmitPanelUi.bypassHooksCheckBox->setChecked(data.bypassHooks);

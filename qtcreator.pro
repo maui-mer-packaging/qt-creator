@@ -1,9 +1,9 @@
 include(qtcreator.pri)
 
 #version check qt
-!minQtVersion(4, 8, 0) {
+!minQtVersion(5, 3, 1) {
     message("Cannot build Qt Creator with Qt version $${QT_VERSION}.")
-    error("Use at least Qt 4.8.0.")
+    error("Use at least Qt 5.3.1.")
 }
 
 include(doc/doc.pri)
@@ -18,7 +18,7 @@ unix:!macx:!isEmpty(copydata):SUBDIRS += bin
 OTHER_FILES += dist/copyright_template.txt \
     $$files(dist/changes-*) \
     qtcreator.qbs \
-    qbs/pluginspec/pluginspec.qbs \
+    qbs/pluginjson/pluginjson.qbs \
     $$files(dist/installer/ifw/config/config-*) \
     dist/installer/ifw/packages/org.qtproject.qtcreator/meta/package.xml.in \
     dist/installer/ifw/packages/org.qtproject.qtcreator.application/meta/installscript.qs \
@@ -28,7 +28,7 @@ OTHER_FILES += dist/copyright_template.txt \
     $$files(scripts/*.sh) \
     $$files(scripts/*.pl)
 
-minQtVersion(5, 0, 0):exists(src/shared/qbs/qbs.pro) {
+exists(src/shared/qbs/qbs.pro) {
     # Make sure the qbs dll ends up alongside the Creator executable.
     QBS_DLLDESTDIR = $${IDE_BUILD_TREE}/bin
     cache(QBS_DLLDESTDIR)
@@ -45,15 +45,15 @@ minQtVersion(5, 0, 0):exists(src/shared/qbs/qbs.pro) {
     QBS_RESOURCES_INSTALL_DIR = $${QTC_PREFIX}/share/qtcreator/qbs
     cache(QBS_RESOURCES_INSTALL_DIR)
     macx {
-        QBS_PLUGINS_BUILD_DIR = $${IDE_LIBRARY_PATH}
-        QBS_APPS_RPATH_DIR = @loader_path/../PlugIns
+        QBS_PLUGINS_BUILD_DIR = $${IDE_PLUGIN_PATH}
+        QBS_APPS_RPATH_DIR = @loader_path/../Frameworks
     } else {
-        QBS_PLUGINS_BUILD_DIR = $${IDE_BUILD_TREE}/$${IDE_LIBRARY_BASENAME}/qtcreator
+        QBS_PLUGINS_BUILD_DIR = $${IDE_BUILD_TREE}/$${IDE_LIBRARY_BASENAME}/qtcreator/plugins
         QBS_APPS_RPATH_DIR = \$\$ORIGIN/../$$IDE_LIBRARY_BASENAME/qtcreator
     }
     cache(QBS_PLUGINS_BUILD_DIR)
     cache(QBS_APPS_RPATH_DIR)
-    QBS_PLUGINS_INSTALL_DIR = $${QTC_PREFIX}/$${IDE_LIBRARY_BASENAME}/qtcreator
+    QBS_PLUGINS_INSTALL_DIR = $${QTC_PREFIX}/$${IDE_LIBRARY_BASENAME}/qtcreator/plugins
     cache(QBS_PLUGINS_INSTALL_DIR)
     QBS_LIBRARY_DIRNAME = $${IDE_LIBRARY_BASENAME}
     cache(QBS_LIBRARY_DIRNAME)

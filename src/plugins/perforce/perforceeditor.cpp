@@ -56,9 +56,7 @@ namespace Perforce {
 namespace Internal {
 
 // ------------ PerforceEditor
-PerforceEditor::PerforceEditor(const VcsBase::VcsBaseEditorParameters *type,
-                               QWidget *parent)  :
-    VcsBase::VcsBaseEditorWidget(type, parent),
+PerforceEditorWidget::PerforceEditorWidget() :
     m_changeNumberPattern(QLatin1String("^\\d+$"))
 {
     QTC_CHECK(m_changeNumberPattern.isValid());
@@ -70,11 +68,9 @@ PerforceEditor::PerforceEditor(const VcsBase::VcsBaseEditorParameters *type,
     setDiffFilePattern(QRegExp(QLatin1String("^(?:={4}|\\+{3}) (.+)(?:\\t|#\\d)")));
     setLogEntryPattern(QRegExp(QLatin1String("^... #\\d change (\\d+) ")));
     setAnnotateRevisionTextFormat(tr("Annotate change list \"%1\""));
-    if (Perforce::Constants::debug)
-        qDebug() << "PerforceEditor::PerforceEditor" << type->type << type->id;
 }
 
-QSet<QString> PerforceEditor::annotationChanges() const
+QSet<QString> PerforceEditorWidget::annotationChanges() const
 {
     QSet<QString> changes;
     const QString txt = toPlainText();
@@ -98,7 +94,7 @@ QSet<QString> PerforceEditor::annotationChanges() const
     return changes;
 }
 
-QString PerforceEditor::changeUnderCursor(const QTextCursor &c) const
+QString PerforceEditorWidget::changeUnderCursor(const QTextCursor &c) const
 {
     QTextCursor cursor = c;
     // Any number is regarded as change number.
@@ -109,12 +105,12 @@ QString PerforceEditor::changeUnderCursor(const QTextCursor &c) const
     return m_changeNumberPattern.exactMatch(change) ? change : QString();
 }
 
-VcsBase::BaseAnnotationHighlighter *PerforceEditor::createAnnotationHighlighter(const QSet<QString> &changes) const
+VcsBase::BaseAnnotationHighlighter *PerforceEditorWidget::createAnnotationHighlighter(const QSet<QString> &changes) const
 {
     return new PerforceAnnotationHighlighter(changes);
 }
 
-QString PerforceEditor::findDiffFile(const QString &f) const
+QString PerforceEditorWidget::findDiffFile(const QString &f) const
 {
     QString errorMessage;
     const QString fileName = PerforcePlugin::fileNameFromPerforceName(f.trimmed(), false, &errorMessage);
@@ -123,7 +119,7 @@ QString PerforceEditor::findDiffFile(const QString &f) const
     return fileName;
 }
 
-QStringList PerforceEditor::annotationPreviousVersions(const QString &v) const
+QStringList PerforceEditorWidget::annotationPreviousVersions(const QString &v) const
 {
     bool ok;
     const int changeList = v.toInt(&ok);

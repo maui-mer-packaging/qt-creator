@@ -39,19 +39,54 @@
 
 #include <utils/qtcoverride.h>
 
-#include <QScopedPointer>
 #include <QIcon>
+#include <QScopedPointer>
+#include <QSharedPointer>
 
-namespace GLSL { class Function; }
+namespace GLSL {
+class Engine;
+class Function;
+class TranslationUnitAST;
+class Scope;
+} // namespace GLSL
 
 namespace TextEditor { class BasicProposalItem; }
 
-namespace GLSLEditor {
+namespace GlslEditor {
 namespace Internal {
 
-class GLSLCompletionAssistInterface;
+class Document
+{
+public:
+    typedef QSharedPointer<Document> Ptr;
 
-class GLSLCompletionAssistProvider : public TextEditor::CompletionAssistProvider
+    Document();
+    ~Document();
+
+    GLSL::Engine *engine() const { return _engine; }
+    GLSL::TranslationUnitAST *ast() const { return _ast; }
+    GLSL::Scope *globalScope() const { return _globalScope; }
+
+    GLSL::Scope *scopeAt(int position) const;
+    void addRange(const QTextCursor &cursor, GLSL::Scope *scope);
+
+private:
+    struct Range {
+        QTextCursor cursor;
+        GLSL::Scope *scope;
+    };
+
+    GLSL::Engine *_engine;
+    GLSL::TranslationUnitAST *_ast;
+    GLSL::Scope *_globalScope;
+    QList<Range> _cursors;
+
+    friend class GlslEditorWidget;
+};
+
+class GlslCompletionAssistInterface;
+
+class GlslCompletionAssistProvider : public TextEditor::CompletionAssistProvider
 {
     Q_OBJECT
 
@@ -63,11 +98,11 @@ public:
     bool isActivationCharSequence(const QString &sequence) const QTC_OVERRIDE;
 };
 
-class GLSLCompletionAssistProcessor : public TextEditor::IAssistProcessor
+class GlslCompletionAssistProcessor : public TextEditor::IAssistProcessor
 {
 public:
-    GLSLCompletionAssistProcessor();
-    ~GLSLCompletionAssistProcessor();
+    GlslCompletionAssistProcessor();
+    ~GlslCompletionAssistProcessor();
 
     TextEditor::IAssistProposal *perform(const TextEditor::IAssistInterface *interface) QTC_OVERRIDE;
 
@@ -78,7 +113,7 @@ private:
     void addCompletion(const QString &text, const QIcon &icon, int order = 0);
 
     int m_startPosition;
-    QScopedPointer<const GLSLCompletionAssistInterface> m_interface;
+    QScopedPointer<const GlslCompletionAssistInterface> m_interface;
     QList<TextEditor::BasicProposalItem *> m_completions;
 
     QIcon m_keywordIcon;
@@ -92,10 +127,10 @@ private:
     QIcon m_otherIcon;
 };
 
-class GLSLCompletionAssistInterface : public TextEditor::DefaultAssistInterface
+class GlslCompletionAssistInterface : public TextEditor::DefaultAssistInterface
 {
 public:
-    GLSLCompletionAssistInterface(QTextDocument *textDocument,
+    GlslCompletionAssistInterface(QTextDocument *textDocument,
                                   int position, const QString &fileName,
                                   TextEditor::AssistReason reason,
                                   const QString &mimeType,
@@ -109,7 +144,7 @@ private:
     Document::Ptr m_glslDoc;
 };
 
-} // Internal
-} // GLSLEditor
+} // namespace Internal
+} // namespace GlslEditor
 
 #endif // GLSLCOMPLETIONASSIST_H

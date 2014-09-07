@@ -47,7 +47,6 @@
 #include <QVBoxLayout>
 #include <QToolButton>
 #include <QMenu>
-#include <QClipboard>
 
 enum {
     debug = false
@@ -234,12 +233,8 @@ void EditorToolBar::setCloseSplitIcon(const QIcon &icon)
 
 void EditorToolBar::closeEditor()
 {
-    IEditor *current = EditorManager::currentEditor();
-    if (!current)
-        return;
-
     if (d->m_isStandalone)
-        EditorManager::closeEditor(current);
+        EditorManager::slotCloseCurrentEditorOrDocument();
     emit closeClicked();
 }
 
@@ -315,26 +310,18 @@ void EditorToolBar::changeActiveEditor(int row)
 
 void EditorToolBar::listContextMenu(QPoint pos)
 {
-    DocumentModel::Entry *entry = DocumentModel::entryAtRow(
-                d->m_editorList->currentIndex());
-    QString fileName = entry ? entry->fileName() : QString();
-    QString shortFileName = entry ? QFileInfo(fileName).fileName() : QString();
-    QMenu menu;
-    QAction *copyPath = menu.addAction(tr("Copy Full Path to Clipboard"));
-    QAction *copyFileName = menu.addAction(tr("Copy File Name to Clipboard"));
-    menu.addSeparator();
-    if (fileName.isEmpty() || shortFileName.isEmpty()) {
-        copyPath->setEnabled(false);
-        copyFileName->setEnabled(false);
+    if (d->m_isStandalone) {
+        IEditor *editor = EditorManager::currentEditor();
+        DocumentModel::Entry entry;
+        entry.document = editor ? editor->document() : 0;
+        QMenu menu;
+        EditorManager::addSaveAndCloseEditorActions(&menu, &entry, editor);
+        menu.addSeparator();
+        EditorManager::addNativeDirAndOpenWithActions(&menu, &entry);
+        menu.exec(d->m_editorList->mapToGlobal(pos));
+    } else {
+        emit listContextMenuRequested(d->m_editorList->mapToGlobal(pos));
     }
-    EditorManager::addSaveAndCloseEditorActions(&menu, entry);
-    menu.addSeparator();
-    EditorManager::addNativeDirAndOpenWithActions(&menu, entry);
-    QAction *result = menu.exec(d->m_editorList->mapToGlobal(pos));
-    if (result == copyPath)
-        QApplication::clipboard()->setText(QDir::toNativeSeparators(fileName));
-    if (result == copyFileName)
-        QApplication::clipboard()->setText(shortFileName);
 }
 
 void EditorToolBar::makeEditorWritable()

@@ -137,7 +137,7 @@ public:
     static void closeDocument(DocumentModel::Entry *entry);
     static void closeOtherDocuments(IDocument *document);
 
-    static void addCurrentPositionToNavigationHistory(IEditor *editor = 0, const QByteArray &saveState = QByteArray());
+    static void addCurrentPositionToNavigationHistory(const QByteArray &saveState = QByteArray());
     static void cutForwardNavigationHistory();
 
     static bool saveDocument(IDocument *document);
@@ -167,7 +167,8 @@ public:
     static void setWindowTitleAdditionHandler(WindowTitleHandler handler);
     static void setWindowTitleVcsTopicHandler(WindowTitleHandler handler);
 
-    static void addSaveAndCloseEditorActions(QMenu *contextMenu, DocumentModel::Entry *entry);
+    static void addSaveAndCloseEditorActions(QMenu *contextMenu, DocumentModel::Entry *entry,
+                                             IEditor *editor = 0);
     static void addNativeDirAndOpenWithActions(QMenu *contextMenu, DocumentModel::Entry *entry);
 
 signals:
@@ -184,7 +185,7 @@ public slots:
     static void saveDocumentAs();
     static void revertToSaved();
     static bool closeAllEditors(bool askAboutModifiedEditors = true);
-    static void closeEditor();
+    static void slotCloseCurrentEditorOrDocument();
     static void closeOtherDocuments();
     static void splitSideBySide();
     static void gotoOtherSplit();

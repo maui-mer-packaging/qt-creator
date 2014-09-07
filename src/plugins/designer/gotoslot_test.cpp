@@ -29,16 +29,14 @@
 
 #include "formeditorplugin.h"
 
-#if QT_VERSION < 0x050000
-#include <QtTest>
-#else
 #include "formeditorw.h"
 
 #include <coreplugin/editormanager/editormanager.h>
 #include <coreplugin/testdatadir.h>
+#include <cpptools/builtineditordocumentprocessor.h>
 #include <cpptools/cppmodelmanager.h>
-#include <cpptools/cpptoolseditorsupport.h>
 #include <cpptools/cpptoolstestcase.h>
+#include <cpptools/editordocumenthandle.h>
 
 #include <cplusplus/CppDocument.h>
 #include <cplusplus/Overview.h>
@@ -166,8 +164,6 @@ public:
             closeEditorAtEndOfTestCase(editor);
             editors << e;
         }
-        TextEditor::BaseTextEditor *cppFileEditor = editors.at(0);
-        TextEditor::BaseTextEditor *hFileEditor = editors.at(1);
 
         const QString cppFile = files.at(0);
         const QString hFile = files.at(1);
@@ -176,8 +172,7 @@ public:
         waitForFilesInGlobalSnapshot(QStringList() << cppFile << hFile);
 
         // Execute "Go To Slot"
-        FormEditorW *few = FormEditorW::instance();
-        QDesignerIntegrationInterface *integration = few->designerEditor()->integration();
+        QDesignerIntegrationInterface *integration = FormEditorW::designerEditor()->integration();
         QVERIFY(integration);
         integration->emitNavigateToSlot(QLatin1String("pushButton"), QLatin1String("clicked()"),
                                         QStringList());
@@ -187,18 +182,22 @@ public:
 
         // Wait for updated documents
         foreach (TextEditor::BaseTextEditor *editor, editors) {
-            if (CppEditorSupport *editorSupport = m_modelManager->cppEditorSupport(editor)) {
-                while (editorSupport->isUpdatingDocument())
+            const QString filePath = editor->document()->filePath();
+            if (auto parser = BuiltinEditorDocumentParser::get(filePath)) {
+                forever {
+                    if (Document::Ptr document = parser->document()) {
+                        if (document->editorRevision() == 2)
+                            break;
+                    }
                     QApplication::processEvents();
+                }
             }
         }
 
         // Compare
-        const Document::Ptr cppDocument
-            = m_modelManager->cppEditorSupport(cppFileEditor)->snapshotUpdater()->document();
+        const Document::Ptr cppDocument = BuiltinEditorDocumentParser::get(cppFile)->document();
         QVERIFY(checkDiagsnosticMessages(cppDocument));
-        const Document::Ptr hDocument
-            = m_modelManager->cppEditorSupport(hFileEditor)->snapshotUpdater()->document();
+        const Document::Ptr hDocument = BuiltinEditorDocumentParser::get(hFile)->document();
         QVERIFY(checkDiagsnosticMessages(hDocument));
 
         QVERIFY(documentContainsFunctionDefinition(cppDocument,
@@ -228,23 +227,17 @@ public:
 };
 
 } // anonymous namespace
-#endif
 
 /// Check: Executes "Go To Slot..." on a QPushButton in a *.ui file and checks if the respective
 /// header and source files are correctly updated.
 void Designer::Internal::FormEditorPlugin::test_gotoslot()
 {
-#if QT_VERSION >= 0x050000
     QFETCH(QStringList, files);
     (GoToSlotTestCase(files));
-#else
-    QSKIP("Available only with >= Qt5", SkipSingle);
-#endif
 }
 
 void Designer::Internal::FormEditorPlugin::test_gotoslot_data()
 {
-#if QT_VERSION >= 0x050000
     typedef QLatin1String _;
     QTest::addColumn<QStringList>("files");
 
@@ -282,5 +275,4 @@ void Designer::Internal::FormEditorPlugin::test_gotoslot_data()
             << testDataDir.file(_("form.cpp"))
             << testDataDir.file(_("form.h"))
             << testDataDir.file(_("form.ui")));
-#endif
 }

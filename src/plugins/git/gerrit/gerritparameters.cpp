@@ -132,7 +132,7 @@ void GerritParameters::toSettings(QSettings *s) const
 void GerritParameters::saveQueries(QSettings *s) const
 {
     s->beginGroup(QLatin1String(settingsGroupC));
-    s->setValue(QLatin1String(savedQueriesKeyC), savedQueries.join(QLatin1String(",")));
+    s->setValue(QLatin1String(savedQueriesKeyC), savedQueries.join(QLatin1Char(',')));
     s->endGroup();
 }
 
@@ -145,7 +145,7 @@ void GerritParameters::fromSettings(const QSettings *s)
     port = s->value(rootKey + QLatin1String(portKeyC), QVariant(int(defaultPort))).toInt();
     portFlag = s->value(rootKey + QLatin1String(portFlagKeyC), QLatin1String(defaultPortFlag)).toString();
     savedQueries = s->value(rootKey + QLatin1String(savedQueriesKeyC), QString()).toString()
-            .split(QLatin1String(","));
+            .split(QLatin1Char(','));
     https = s->value(rootKey + QLatin1String(httpsKeyC), QVariant(true)).toBool();
     if (ssh.isEmpty())
         ssh = detectSsh();

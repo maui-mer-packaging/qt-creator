@@ -35,23 +35,12 @@
 namespace PythonEditor {
 namespace Internal {
 
-class PythonEditorWidget;
-
-class PythonEditor : public TextEditor::BaseTextEditor
+class PythonEditorFactory : public TextEditor::BaseTextEditorFactory
 {
     Q_OBJECT
 
 public:
-    explicit PythonEditor(PythonEditorWidget *editorWidget);
-
-    Core::IEditor *duplicate();
-
-    /**
-      Opens file for editing, actual work performed by base class
-      */
-    bool open(QString *errorString,
-              const QString &fileName,
-              const QString &realFileName);
+    PythonEditorFactory();
 };
 
 } // namespace Internal

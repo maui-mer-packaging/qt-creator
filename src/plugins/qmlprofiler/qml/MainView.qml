@@ -76,12 +76,6 @@ Rectangle {
 
     Connections {
         target: qmlProfilerModelProxy
-        onStateChanged: {
-            // Clear if model is empty.
-            if (qmlProfilerModelProxy.getState() === 0)
-                root.clear();
-            backgroundMarks.requestPaint()
-        }
         onDataAvailable: {
             view.clearData();
             zoomControl.setRange(qmlProfilerModelProxy.traceStartTime(),
@@ -89,6 +83,7 @@ Rectangle {
                                  qmlProfilerModelProxy.traceDuration()/10);
             view.requestPaint();
         }
+        onStateChanged: backgroundMarks.requestPaint()
         onExpandedChanged: backgroundMarks.requestPaint()
         onRowHeightChanged: backgroundMarks.requestPaint()
     }
@@ -140,10 +135,10 @@ Rectangle {
             return;
 
         // if item is outside of the view, jump back to its position
-        if (qmlProfilerModelProxy.getEndTime(modelIndex, itemIndex) < view.startTime ||
-                qmlProfilerModelProxy.getStartTime(modelIndex, itemIndex) > view.endTime) {
-            recenter((qmlProfilerModelProxy.getStartTime(modelIndex, itemIndex) +
-                      qmlProfilerModelProxy.getEndTime(modelIndex, itemIndex)) / 2);
+        if (qmlProfilerModelProxy.endTime(modelIndex, itemIndex) < view.startTime ||
+                qmlProfilerModelProxy.startTime(modelIndex, itemIndex) > view.endTime) {
+            recenter((qmlProfilerModelProxy.startTime(modelIndex, itemIndex) +
+                      qmlProfilerModelProxy.endTime(modelIndex, itemIndex)) / 2);
         }
     }
 
@@ -160,7 +155,7 @@ Rectangle {
     function selectById(modelIndex, eventId)
     {
         if (eventId === -1 || (modelIndex === view.selectedModel &&
-                eventId === qmlProfilerModelProxy.getEventId(modelIndex, view.selectedItem)))
+                eventId === qmlProfilerModelProxy.eventId(modelIndex, view.selectedItem)))
             return;
 
         // this is a slot responding to events from the other pane
@@ -353,16 +348,18 @@ Rectangle {
             onSelectionChanged: {
                 if (selectedItem !== -1) {
                     // display details
-                    rangeDetails.showInfo(qmlProfilerModelProxy.getEventDetails(selectedModel, selectedItem));
-                    rangeDetails.setLocation(qmlProfilerModelProxy.getEventLocation(selectedModel, selectedItem));
+                    rangeDetails.showInfo(qmlProfilerModelProxy.details(selectedModel,
+                                                                        selectedItem));
+                    rangeDetails.setLocation(qmlProfilerModelProxy.location(selectedModel,
+                                                                            selectedItem));
 
                     // center view (horizontally)
                     recenterOnItem(selectedModel, selectedItem);
                     if (!lockItemSelection) {
                         lockItemSelection = true;
                         // update in other views
-                        var eventLocation = qmlProfilerModelProxy.getEventLocation(
-                                    view.selectedModel, view.selectedItem);
+                        var eventLocation = qmlProfilerModelProxy.location(view.selectedModel,
+                                                                           view.selectedItem);
                         gotoSourceLocation(eventLocation.file, eventLocation.line,
                                            eventLocation.column);
                         lockItemSelection = false;
@@ -373,14 +370,14 @@ Rectangle {
             }
 
             onItemPressed: {
-                var location = qmlProfilerModelProxy.getEventLocation(modelIndex, pressedItem);
+                var location = qmlProfilerModelProxy.location(modelIndex, pressedItem);
                 if (location.hasOwnProperty("file")) // not empty
                     root.gotoSourceLocation(location.file, location.line, location.column);
             }
 
          // hack to pass mouse events to the other mousearea if enabled
-            startDragArea: selectionRange.ready ? selectionRange.getLeft() : -x
-            endDragArea: selectionRange.ready ? selectionRange.getRight() : -x - 1
+            startDragArea: selectionRange.ready ? selectionRange.rangeLeft : -x
+            endDragArea: selectionRange.ready ? selectionRange.rangeRight : -x - 1
         }
         MouseArea {
             id: selectionRangeControl
@@ -422,7 +419,7 @@ Rectangle {
         startTime: selectionRange.startTimeString
         duration: selectionRange.durationString
         endTime: selectionRange.endTimeString
-        showDuration: selectionRange.getWidth() > 1
+        showDuration: selectionRange.rangeWidth > 1
     }
 
     RangeDetails {
@@ -475,7 +472,7 @@ Rectangle {
                 var fixedPoint = (view.startTime + view.endTime) / 2;
                 if (view.selectedItem !== -1) {
                     // center on selected item if it's inside the current screen
-                    var newFixedPoint = qmlProfilerModelProxy.getStartTime(view.selectedModel, view.selectedItem);
+                    var newFixedPoint = qmlProfilerModelProxy.startTime(view.selectedModel, view.selectedItem);
                     if (newFixedPoint >= view.startTime && newFixedPoint < view.endTime)
                         fixedPoint = newFixedPoint;
                 }

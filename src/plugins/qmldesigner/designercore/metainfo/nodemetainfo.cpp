@@ -786,8 +786,10 @@ void NodeMetaInfoPrivate::setupLocalPropertyInfo(QList<PropertyInfo> localProper
 void NodeMetaInfoPrivate::setupPropertyInfo(QList<PropertyInfo> propertyInfos)
 {
     foreach (const PropertyInfo &propertyInfo, propertyInfos) {
-        m_properties.append(propertyInfo.first);
-        m_propertyTypes.append(propertyInfo.second);
+        if (!m_properties.contains(propertyInfo.first)) {
+            m_properties.append(propertyInfo.first);
+            m_propertyTypes.append(propertyInfo.second);
+        }
     }
 }
 
@@ -968,7 +970,7 @@ static QString getPackage(const QString &name)
         return QString();
     nameComponents.removeLast();
 
-    return nameComponents.join(QStringLiteral("."));
+    return nameComponents.join(QLatin1Char('.'));
 }
 
 bool NodeMetaInfoPrivate::cleverCheckType(const QString &otherType) const
@@ -1132,7 +1134,7 @@ QString NodeMetaInfoPrivate::lookupName() const
     QStringList packageClassName = className.split(QLatin1Char('.'));
     if (packageClassName.size() > 1) {
         className = packageClassName.takeLast();
-        packageName = packageClassName.join(QStringLiteral("."));
+        packageName = packageClassName.join(QLatin1Char('.'));
     }
 
     return CppQmlTypes::qualifiedName(

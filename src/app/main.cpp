@@ -36,12 +36,12 @@
 #include <extensionsystem/pluginspec.h>
 #include <qtsingleapplication.h>
 #include <utils/hostosinfo.h>
-#include <utils/logging.h>
 
 #include <QDebug>
 #include <QDir>
 #include <QFileInfo>
 #include <QLibraryInfo>
+#include <QLoggingCategory>
 #include <QSettings>
 #include <QTextStream>
 #include <QThreadPool>
@@ -53,8 +53,8 @@
 #include <QNetworkProxyFactory>
 
 #include <QApplication>
-#include <QDesktopServices>
 #include <QMessageBox>
+#include <QStandardPaths>
 
 #ifdef ENABLE_QT_BREAKPAD
 #include <qtsystemexceptionhandler.h>
@@ -214,7 +214,8 @@ static inline QStringList getPluginPaths()
     //    "%LOCALAPPDATA%\QtProject\qtcreator" on Windows Vista and later
     //    "$XDG_DATA_HOME/data/QtProject/qtcreator" or "~/.local/share/data/QtProject/qtcreator" on Linux
     //    "~/Library/Application Support/QtProject/Qt Creator" on Mac
-    pluginPath = QDesktopServices::storageLocation(QDesktopServices::DataLocation);
+    pluginPath = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation)
+            + QLatin1String("/data");
     pluginPath += QLatin1Char('/')
             + QLatin1String(Core::Constants::IDE_SETTINGSVARIANT_STR)
             + QLatin1Char('/');
@@ -297,11 +298,6 @@ int main(int argc, char **argv)
     setrlimit(RLIMIT_NOFILE, &rl);
 #endif
 
-#if defined(Q_OS_UNIX) && !defined(Q_OS_MAC)
-    // QML is unusable with the xlib backend
-    QApplication::setGraphicsSystem(QLatin1String("raster"));
-#endif
-
     SharedTools::QtSingleApplication app((QLatin1String(appNameC)), argc, argv);
 
     const int threadCount = QThreadPool::globalInstance()->maxThreadCount();
@@ -318,7 +314,7 @@ int main(int argc, char **argv)
 #endif
 
     // Manually determine -settingspath command line option
-    // We can't use the regular way of the plugin manager, because that needs to parse pluginspecs
+    // We can't use the regular way of the plugin manager, because that needs to parse plugin meta data
     // but the settings path can influence which plugins are enabled
     QString settingsPath;
     QStringList customPluginPaths;
@@ -362,7 +358,7 @@ int main(int argc, char **argv)
                                               QLatin1String(Core::Constants::IDE_SETTINGSVARIANT_STR),
                                               QLatin1String("QtCreator"));
     PluginManager pluginManager;
-    PluginManager::setFileExtension(QLatin1String("pluginspec"));
+    PluginManager::setPluginIID(QLatin1String("org.qt-project.Qt.QtCreatorPlugin"));
     PluginManager::setGlobalSettings(globalSettings);
     PluginManager::setSettings(settings);
 
@@ -452,8 +448,8 @@ int main(int argc, char **argv)
         }
     }
     if (!coreplugin) {
-        QString nativePaths = QDir::toNativeSeparators(pluginPaths.join(QLatin1String(",")));
-        const QString reason = QCoreApplication::translate("Application", "Could not find 'Core.pluginspec' in %1").arg(nativePaths);
+        QString nativePaths = QDir::toNativeSeparators(pluginPaths.join(QLatin1Char(',')));
+        const QString reason = QCoreApplication::translate("Application", "Could not find Core plugin in %1").arg(nativePaths);
         displayError(msgCoreLoadFailure(reason));
         return 1;
     }

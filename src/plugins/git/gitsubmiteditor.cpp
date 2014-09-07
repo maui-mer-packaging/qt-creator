@@ -37,7 +37,7 @@
 #include <coreplugin/progressmanager/progressmanager.h>
 #include <utils/qtcassert.h>
 #include <vcsbase/submitfilemodel.h>
-#include <vcsbase/vcsbaseoutputwindow.h>
+#include <vcsbase/vcsoutputwindow.h>
 
 #include <QDebug>
 #include <QStringList>
@@ -45,6 +45,8 @@
 #include <QtConcurrentRun>
 
 static const char TASK_UPDATE_COMMIT[] = "Git.UpdateCommit";
+
+using namespace VcsBase;
 
 namespace Git {
 namespace Internal {
@@ -121,8 +123,8 @@ private:
  * option for staged files. So, we sort apart the diff file lists
  * according to a type flag we add to the model. */
 
-GitSubmitEditor::GitSubmitEditor(const VcsBase::VcsBaseSubmitEditorParameters *parameters, QWidget *parent) :
-    VcsBaseSubmitEditor(parameters, new GitSubmitEditorWidget(parent)),
+GitSubmitEditor::GitSubmitEditor(const VcsBase::VcsBaseSubmitEditorParameters *parameters) :
+    VcsBaseSubmitEditor(parameters, new GitSubmitEditorWidget),
     m_model(0),
     m_commitEncoding(0),
     m_commitType(SimpleCommit),
@@ -251,7 +253,7 @@ void GitSubmitEditor::commitDataRetrieved(bool success)
         w->setEnabled(true);
     } else {
         // Nothing to commit left!
-        VcsBase::VcsBaseOutputWindow::instance()->appendError(m_commitDataFetcher->errorMessage());
+        VcsOutputWindow::appendError(m_commitDataFetcher->errorMessage());
         m_model->clear();
         w->setEnabled(false);
     }

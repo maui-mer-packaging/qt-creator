@@ -173,6 +173,7 @@ const char G_WINDOW_PANES[]        = "QtCreator.Group.Window.Panes";
 const char G_WINDOW_VIEWS[]        = "QtCreator.Group.Window.Views";
 const char G_WINDOW_SPLIT[]        = "QtCreator.Group.Window.Split";
 const char G_WINDOW_NAVIGATE[]     = "QtCreator.Group.Window.Navigate";
+const char G_WINDOW_LIST[]         = "QtCreator.Group.Window.List";
 const char G_WINDOW_OTHER[]        = "QtCreator.Group.Window.Other";
 
 // Help groups (global)
@@ -221,6 +222,10 @@ const char ICON_INFO[]               = ":/core/images/info.png";
 
 const char WIZARD_CATEGORY_QT[] = "R.Qt";
 const char WIZARD_TR_CATEGORY_QT[] = QT_TRANSLATE_NOOP("Core", "Qt");
+const char WIZARD_KIND_UNKNOWN[] = "unknown";
+const char WIZARD_KIND_PROJECT[] = "project";
+const char WIZARD_KIND_CLASS[] = "class";
+const char WIZARD_KIND_FILE[] = "file";
 
 const char SETTINGS_CATEGORY_CORE[] = "A.Core";
 const char SETTINGS_CATEGORY_CORE_ICON[] = ":/core/images/category_core.png";

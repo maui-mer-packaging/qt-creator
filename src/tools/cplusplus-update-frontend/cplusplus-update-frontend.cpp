@@ -27,21 +27,13 @@
 **
 ****************************************************************************/
 
-#include <QStringList>
-#include <QTextDocument>
-#include <QTextCursor>
-#include <QTextBlock>
-#include <QDir>
 #include <QDebug>
-
-#if QT_VERSION >= 0x050000
-    // Qt5: QTextDocument needs access to Fonts via QGuiApplication.
-    #include <QGuiApplication>
-    typedef QGuiApplication MyQApplication;
-#else
-    #include <QCoreApplication>
-    typedef QCoreApplication MyQApplication;
-#endif
+#include <QDir>
+#include <QGuiApplication>
+#include <QStringList>
+#include <QTextBlock>
+#include <QTextCursor>
+#include <QTextDocument>
 
 #include <cplusplus/Control.h>
 #include <cplusplus/Parser.h>
@@ -1300,8 +1292,8 @@ void generateASTVisitor_H(const Snapshot &, const QDir &cplusplusDir,
 "\n"
 "    void accept(AST *ast);\n"
 "\n"
-"    template <typename _Tp>\n"
-"    void accept(List<_Tp> *it)\n"
+"    template <typename Tptr>\n"
+"    void accept(List<Tptr> *it)\n"
 "    {\n"
 "        for (; it; it = it->next)\n"
 "            accept(it->value);\n"
@@ -1659,15 +1651,15 @@ void generateASTPatternBuilder_h(const QDir &cplusplusDir)
         out
                 << ")" << endl
                 << "    {" << endl
-                << "        " << className << " *__ast = new (&pool) " << className << ';' << endl;
+                << "        " << className << " *ast = new (&pool) " << className << ';' << endl;
 
 
         foreach (const StringPair &p, args) {
-            out << "        __ast->" << p.second << " = " << p.second << ';' << endl;
+            out << "        ast->" << p.second << " = " << p.second << ';' << endl;
         }
 
         out
-                << "        return __ast;" << endl
+                << "        return ast;" << endl
                 << "    }" << endl
                 << endl;
     }
@@ -1681,10 +1673,10 @@ void generateASTPatternBuilder_h(const QDir &cplusplusDir)
                 << "    " << className << " *" << methodName << "("
                 << elementName << " *value, " << className << " *next = 0)" << endl
                 << "    {" << endl
-                << "        " << className << " *__list = new (&pool) " << className << ";" << endl
-                << "        __list->next = next;" << endl
-                << "        __list->value = value;" << endl
-                << "        return __list;" << endl
+                << "        " << className << " *list = new (&pool) " << className << ";" << endl
+                << "        list->next = next;" << endl
+                << "        list->value = value;" << endl
+                << "        return list;" << endl
                 << "    }" << endl
                 << endl;
     }
@@ -1720,7 +1712,7 @@ void printUsage()
 
 int main(int argc, char *argv[])
 {
-    MyQApplication app(argc, argv);
+    QGuiApplication app(argc, argv);
     QStringList args = app.arguments();
     args.removeFirst();
 

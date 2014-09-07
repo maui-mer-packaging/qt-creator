@@ -922,8 +922,31 @@ ClassOrNamespace *ClassOrNamespace::lookupType_helper(const Name *name,
     return 0;
 }
 
-ClassOrNamespace *ClassOrNamespace::findSpecializationWithPointer(const TemplateNameId *templId,
-                                                         const TemplateNameIdTable &specializations)
+static ClassOrNamespace *findSpecializationWithMatchingTemplateArgument(const Name *argumentName,
+                                                                        ClassOrNamespace *reference)
+{
+    foreach (Symbol *s, reference->symbols()) {
+        if (Class *clazz = s->asClass()) {
+            if (Template *templateSpecialization = clazz->enclosingTemplate()) {
+                const unsigned argumentCountOfSpecialization
+                                    = templateSpecialization->templateParameterCount();
+                for (unsigned i = 0; i < argumentCountOfSpecialization; ++i) {
+                    if (TypenameArgument *tParam
+                            = templateSpecialization->templateParameterAt(i)->asTypenameArgument()) {
+                        if (const Name *name = tParam->name()) {
+                            if (compareName(name, argumentName))
+                                return reference;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+ClassOrNamespace *ClassOrNamespace::findSpecialization(const TemplateNameId *templId,
+                                                       const TemplateNameIdTable &specializations)
 {
     // we go through all specialization and try to find that one with template argument as pointer
     for (TemplateNameIdTable::const_iterator cit = specializations.begin();
@@ -949,11 +972,42 @@ ClassOrNamespace *ClassOrNamespace::findSpecializationWithPointer(const Template
                         && specPointer->elementType().type()->isNamedType()) {
                     return cit->second;
                 }
+
+                ArrayType *specArray
+                        = specializationTemplateArgument.type()->asArrayType();
+                if (specArray && initializationTemplateArgument.type()->isArrayType()) {
+                    if (const NamedType *argumentNamedType
+                            = specArray->elementType().type()->asNamedType()) {
+                        if (const Name *argumentName = argumentNamedType->name()) {
+                            if (ClassOrNamespace *reference
+                                    = findSpecializationWithMatchingTemplateArgument(
+                                            argumentName, cit->second)) {
+                                return reference;
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 
     return 0;
+}
+
+ClassOrNamespace *ClassOrNamespace::findOrCreateNestedAnonymousType(
+        const AnonymousNameId *anonymousNameId)
+{
+    QHash<const AnonymousNameId *, ClassOrNamespace *>::const_iterator cit
+            = _anonymouses.find(anonymousNameId);
+    if (cit != _anonymouses.end()) {
+        return cit.value();
+    } else {
+        ClassOrNamespace *newAnonymous = _factory->allocClassOrNamespace(this);
+        if (Q_UNLIKELY(debug))
+            newAnonymous->_name = anonymousNameId;
+        _anonymouses[anonymousNameId] = newAnonymous;
+        return newAnonymous;
+    }
 }
 
 ClassOrNamespace *ClassOrNamespace::nestedType(const Name *name, ClassOrNamespace *origin)
@@ -963,20 +1017,8 @@ ClassOrNamespace *ClassOrNamespace::nestedType(const Name *name, ClassOrNamespac
 
     const_cast<ClassOrNamespace *>(this)->flush();
 
-    const AnonymousNameId *anonymousNameId = name->asAnonymousNameId();
-    if (anonymousNameId) {
-        QHash<const AnonymousNameId *, ClassOrNamespace *>::const_iterator cit
-                = _anonymouses.find(anonymousNameId);
-        if (cit != _anonymouses.end()) {
-            return cit.value();
-        } else {
-            ClassOrNamespace *newAnonymous = _factory->allocClassOrNamespace(this);
-            if (Q_UNLIKELY(debug))
-                newAnonymous->_name = anonymousNameId;
-            _anonymouses[anonymousNameId] = newAnonymous;
-            return newAnonymous;
-        }
-    }
+    if (const AnonymousNameId *anonymousNameId = name->asAnonymousNameId())
+        return findOrCreateNestedAnonymousType(anonymousNameId);
 
     Table::const_iterator it = _classOrNamespaces.find(name);
     if (it == _classOrNamespaces.end())
@@ -1026,7 +1068,7 @@ ClassOrNamespace *ClassOrNamespace::nestedType(const Name *name, ClassOrNamespac
                 reference = cit->second;
             } else {
                 ClassOrNamespace *specializationWithPointer
-                        = findSpecializationWithPointer(templId, specializations);
+                        = findSpecialization(templId, specializations);
                 if (specializationWithPointer)
                     reference = specializationWithPointer;
                 // TODO: find the best specialization(probably partial) for this instantiation

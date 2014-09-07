@@ -1139,7 +1139,7 @@ bool QmakePriFileNode::ensureWriteableProFile(const QString &file)
             bool makeWritable = QFile::setPermissions(file, fi.permissions() | QFile::WriteUser);
             if (!makeWritable) {
                 QMessageBox::warning(Core::ICore::mainWindow(),
-                                     tr("Failed!"),
+                                     tr("Failed"),
                                      tr("Could not write project file %1.").arg(file));
                 return false;
             }
@@ -1234,7 +1234,7 @@ void QmakePriFileNode::save(const QStringList &lines)
 {
     Core::DocumentManager::expectFileChange(m_projectFilePath);
     Utils::FileSaver saver(m_projectFilePath, QIODevice::Text);
-    saver.write(lines.join(QLatin1String("\n")).toLocal8Bit());
+    saver.write(lines.join(QLatin1Char('\n')).toLocal8Bit());
     saver.finalize(Core::ICore::mainWindow());
 
     m_project->qmakeProjectManager()->notifyChanged(m_projectFilePath);
@@ -1253,7 +1253,7 @@ void QmakePriFileNode::save(const QStringList &lines)
     }
     if (!errorStrings.isEmpty())
         QMessageBox::warning(Core::ICore::mainWindow(), tr("File Error"),
-                             errorStrings.join(QLatin1String("\n")));
+                             errorStrings.join(QLatin1Char('\n')));
 }
 
 QStringList QmakePriFileNode::varNames(ProjectExplorer::FileType type, QtSupport::ProFileReader *readerExact)
@@ -1712,17 +1712,13 @@ void QmakeProFileNode::setupReader()
 
 QmakeProFileNode::EvalResult QmakeProFileNode::evaluate()
 {
-    EvalResult evalResult = EvalOk;
     if (ProFile *pro = m_readerExact->parsedProFile(m_projectFilePath)) {
-        if (!m_readerExact->accept(pro, QMakeEvaluator::LoadAll))
-            evalResult = EvalPartial;
-        if (!m_readerCumulative->accept(pro, QMakeEvaluator::LoadPreFiles))
-            evalResult = EvalFail;
+        bool exactOk = m_readerExact->accept(pro, QMakeEvaluator::LoadAll);
+        bool cumulOk = m_readerCumulative->accept(pro, QMakeEvaluator::LoadPreFiles);
         pro->deref();
-    } else {
-        evalResult = EvalFail;
+        return exactOk ? EvalOk : cumulOk ? EvalPartial : EvalFail;
     }
-    return evalResult;
+    return EvalFail;
 }
 
 void QmakeProFileNode::asyncEvaluate(QFutureInterface<EvalResult> &fi)

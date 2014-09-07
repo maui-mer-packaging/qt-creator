@@ -51,6 +51,7 @@
 #include <QTabWidget>
 #include <QTextEdit>
 
+#include <cstring>
 #include <ctype.h>
 
 //#define USE_WATCH_MODEL_TEST 0
@@ -658,11 +659,11 @@ static QString quoteUnprintable(const QString &str)
             int u = c.unicode();
             if (c.isPrint())
                 encoded += c;
-            else if (u == '\r')
+            else if (u == 10)
                 encoded += QLatin1String("\\r");
-            else if (u == '\t')
+            else if (u == 9)
                 encoded += QLatin1String("\\t");
-            else if (u == '\n')
+            else if (u == 13)
                 encoded += QLatin1String("\\n");
             else
                 encoded += QString::fromLatin1("\\%1")
@@ -768,6 +769,7 @@ QString WatchModel::formattedValue(const WatchData &data) const
     if (data.elided) {
         QString v = value;
         v.chop(1);
+        v = translate(v);
         QString len = data.elided > 0 ? QString::number(data.elided)
                                       : QLatin1String("unknown length");
         return v + QLatin1String("\"... (") + len  + QLatin1Char(')');
@@ -1845,7 +1847,7 @@ void WatchHandler::showEditValue(const WatchData &data)
         QTC_ASSERT(0 < nbytes && nbytes < 10000 * 10000, return);
         QTC_ASSERT(0 < format && format < 32, return);
         QImage im(width, height, QImage::Format(format));
-        qMemCopy(im.bits(), bits, nbytes);
+        std::memcpy(im.bits(), bits, nbytes);
         const QString title = data.address ?
             tr("%1 Object at %2").arg(QLatin1String(data.type),
                 QLatin1String(data.hexAddress())) :

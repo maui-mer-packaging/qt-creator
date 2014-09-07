@@ -37,13 +37,12 @@
 namespace Subversion {
 namespace Internal {
 
-class SubversionEditor : public VcsBase::VcsBaseEditorWidget
+class SubversionEditorWidget : public VcsBase::VcsBaseEditorWidget
 {
     Q_OBJECT
 
 public:
-    explicit SubversionEditor(const VcsBase::VcsBaseEditorParameters *type,
-                            QWidget *parent);
+    SubversionEditorWidget();
 
 private:
     QSet<QString> annotationChanges() const;

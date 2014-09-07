@@ -68,6 +68,7 @@
 
 #include <cplusplus/findcdbbreakpoint.h>
 #include <cpptools/cppmodelmanagerinterface.h>
+#include <cpptools/cppworkingcopy.h>
 
 #include <QDir>
 #include <QMessageBox>
@@ -685,10 +686,10 @@ bool CdbEngine::launchCDB(const DebuggerStartParameters &sp, QString *errorMessa
 
     const QStringList &symbolPaths = stringListSetting(CdbSymbolPaths);
     if (!symbolPaths.isEmpty())
-        arguments << QLatin1String("-y") << symbolPaths.join(QString(QLatin1Char(';')));
+        arguments << QLatin1String("-y") << symbolPaths.join(QLatin1Char(';'));
     const QStringList &sourcePaths = stringListSetting(CdbSourcePaths);
     if (!sourcePaths.isEmpty())
-        arguments << QLatin1String("-srcpath") << sourcePaths.join(QString(QLatin1Char(';')));
+        arguments << QLatin1String("-srcpath") << sourcePaths.join(QLatin1Char(';'));
 
     // Compile argument string preserving quotes
     QString nativeArguments = stringSetting(CdbAdditionalArguments);
@@ -726,7 +727,7 @@ bool CdbEngine::launchCDB(const DebuggerStartParameters &sp, QString *errorMessa
 
     const QString msg = QString::fromLatin1("Launching %1 %2\nusing %3 of %4.").
             arg(QDir::toNativeSeparators(executable),
-                arguments.join(QString(blank)) + blank + nativeArguments,
+                arguments.join(blank) + blank + nativeArguments,
                 QDir::toNativeSeparators(extensionFi.absoluteFilePath()),
                 extensionFi.lastModified().toString(Qt::SystemLocaleShortDate));
     showMessage(msg, LogMisc);
@@ -2796,18 +2797,18 @@ class BreakpointCorrectionContext
 {
 public:
     explicit BreakpointCorrectionContext(const CPlusPlus::Snapshot &s,
-                                         const CppTools::CppModelManagerInterface::WorkingCopy &workingCopy) :
+                                         const CppTools::WorkingCopy &workingCopy) :
         m_snapshot(s), m_workingCopy(workingCopy) {}
 
     unsigned fixLineNumber(const QString &fileName, unsigned lineNumber) const;
 
 private:
     const CPlusPlus::Snapshot m_snapshot;
-    CppTools::CppModelManagerInterface::WorkingCopy m_workingCopy;
+    CppTools::WorkingCopy m_workingCopy;
 };
 
 static CPlusPlus::Document::Ptr getParsedDocument(const QString &fileName,
-                                                  const CppTools::CppModelManagerInterface::WorkingCopy &workingCopy,
+                                                  const CppTools::WorkingCopy &workingCopy,
                                                   const CPlusPlus::Snapshot &snapshot)
 {
     QByteArray src;
@@ -2827,10 +2828,7 @@ static CPlusPlus::Document::Ptr getParsedDocument(const QString &fileName,
 unsigned BreakpointCorrectionContext::fixLineNumber(const QString &fileName,
                                                     unsigned lineNumber) const
 {
-    CPlusPlus::Document::Ptr doc = m_snapshot.document(fileName);
-    if (!doc || !doc->translationUnit()->ast())
-        doc = getParsedDocument(fileName, m_workingCopy, m_snapshot);
-
+    const CPlusPlus::Document::Ptr doc = getParsedDocument(fileName, m_workingCopy, m_snapshot);
     CPlusPlus::FindCdbBreakpoint findVisitor(doc->translationUnit());
     const unsigned correctedLine = findVisitor(lineNumber);
     if (!correctedLine) {

@@ -43,8 +43,8 @@
 #include "androidgdbserverkitinformation.h"
 #include "androidmanifesteditorfactory.h"
 #include "androidpotentialkit.h"
-#include "javaeditorfactory.h"
 #include "javacompletionassistprovider.h"
+#include "javaeditor.h"
 #include "javafilewizard.h"
 #ifdef HAVE_QBS
 #  include "androidqbspropertyprovider.h"
@@ -124,5 +124,3 @@ void AndroidPlugin::updateDevice()
 }
 
 } // namespace Android
-
-Q_EXPORT_PLUGIN(Android::AndroidPlugin)

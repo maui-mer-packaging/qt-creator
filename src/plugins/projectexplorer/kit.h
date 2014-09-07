@@ -97,7 +97,9 @@ public:
     QVariant value(Core::Id key, const QVariant &unset = QVariant()) const;
     bool hasValue(Core::Id key) const;
     void setValue(Core::Id key, const QVariant &value);
+    void setValueSilently(Core::Id key, const QVariant &value);
     void removeKey(Core::Id key);
+    void removeKeySilently(Core::Id key);
     bool isSticky(Core::Id id) const;
 
     bool isDataEqual(const Kit *other) const;
@@ -106,7 +108,7 @@ public:
     void addToEnvironment(Utils::Environment &env) const;
     IOutputParser *createOutputParser() const;
 
-    QString toHtml() const;
+    QString toHtml(const QList<Task> &additional = QList<Task>()) const;
     Kit *clone(bool keepName = false) const;
     void copyFrom(const Kit *k);
 

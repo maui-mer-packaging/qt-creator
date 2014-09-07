@@ -41,12 +41,13 @@ enum ItemRole {
 
 } // Anonymous
 
+namespace CPlusPlus { class Snapshot; }
 namespace TextEditor { class BaseTextEditor; }
 
 namespace CppEditor {
 namespace Internal {
 
-class CPPEditor;
+class CppEditor;
 class CppIncludeHierarchyItem;
 
 class CppIncludeHierarchyModel : public QAbstractItemModel
@@ -72,10 +73,12 @@ public:
 private:
     void buildHierarchyIncludes(const QString &currentFilePath);
     void buildHierarchyIncludes_helper(const QString &filePath, CppIncludeHierarchyItem *parent,
+                                       CPlusPlus::Snapshot snapshot,
                                        QSet<QString> *cyclic, bool recursive = true);
     void buildHierarchyIncludedBy(const QString &currentFilePath);
     void buildHierarchyIncludedBy_helper(const QString &filePath, CppIncludeHierarchyItem *parent,
-                                         QSet<QString> *cyclic, bool recursive = true);
+                                         CPlusPlus::Snapshot snapshot, QSet<QString> *cyclic,
+                                         bool recursive = true);
 
     CppIncludeHierarchyItem *m_rootItem;
     CppIncludeHierarchyItem *m_includesItem;

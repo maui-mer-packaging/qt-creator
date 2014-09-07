@@ -28,54 +28,53 @@
 ****************************************************************************/
 
 #include "glsleditorplugin.h"
+#include "glslcompletionassist.h"
 #include "glsleditor.h"
 #include "glsleditorconstants.h"
-#include "glsleditorfactory.h"
 #include "glslfilewizard.h"
-#include "glslhoverhandler.h"
-#include "glslcompletionassist.h"
 #include "glslhighlighter.h"
-
-#include <coreplugin/icore.h>
-#include <coreplugin/coreconstants.h>
-#include <coreplugin/mimedatabase.h>
-#include <coreplugin/id.h>
-#include <coreplugin/fileiconprovider.h>
-#include <coreplugin/actionmanager/actionmanager.h>
-#include <coreplugin/actionmanager/actioncontainer.h>
-#include <coreplugin/actionmanager/command.h>
-#include <coreplugin/editormanager/editormanager.h>
-#include <projectexplorer/taskhub.h>
-#include <extensionsystem/pluginmanager.h>
-#include <texteditor/highlighterfactory.h>
-#include <texteditor/texteditorconstants.h>
-#include <texteditor/textfilewizard.h>
-#include <utils/qtcassert.h>
+#include "glslhoverhandler.h"
 
 #include <glsl/glslengine.h>
 #include <glsl/glslparser.h>
 #include <glsl/glsllexer.h>
 
-#include <QtPlugin>
-#include <QDebug>
-#include <QSettings>
-#include <QDir>
-#include <QCoreApplication>
-#include <QTimer>
-#include <QMenu>
+#include <coreplugin/actionmanager/actioncontainer.h>
+#include <coreplugin/actionmanager/actionmanager.h>
+#include <coreplugin/actionmanager/command.h>
+#include <coreplugin/coreconstants.h>
+#include <coreplugin/editormanager/editormanager.h>
+#include <coreplugin/fileiconprovider.h>
+#include <coreplugin/icore.h>
+#include <coreplugin/id.h>
+#include <coreplugin/mimedatabase.h>
+
+#include <extensionsystem/pluginmanager.h>
+
+#include <texteditor/highlighterfactory.h>
+#include <texteditor/texteditorconstants.h>
+#include <texteditor/textfilewizard.h>
+
+#include <utils/qtcassert.h>
+
 #include <QAction>
+#include <QCoreApplication>
+#include <QDebug>
+#include <QMenu>
+#include <QSettings>
+#include <QTimer>
+#include <QtPlugin>
 
 using namespace Core;
 using namespace TextEditor;
 
-namespace GLSLEditor {
+namespace GlslEditor {
 namespace Internal {
 
-class GLSLEditorPluginPrivate
+class GlslEditorPluginPrivate
 {
 public:
-    GLSLEditorPluginPrivate() :
-        m_editor(0),
+    GlslEditorPluginPrivate() :
         m_glsl_120_frag(0),
         m_glsl_120_vert(0),
         m_glsl_120_common(0),
@@ -84,7 +83,7 @@ public:
         m_glsl_es_100_common(0)
     {}
 
-    ~GLSLEditorPluginPrivate()
+    ~GlslEditorPluginPrivate()
     {
         delete m_glsl_120_frag;
         delete m_glsl_120_vert;
@@ -94,54 +93,46 @@ public:
         delete m_glsl_es_100_common;
     }
 
-    GLSLEditorFactory *m_editor;
-    QPointer<TextEditor::BaseTextEditor> m_currentTextEditable;
+    QPointer<BaseTextEditor> m_currentTextEditable;
 
-    GLSLEditorPlugin::InitFile *m_glsl_120_frag;
-    GLSLEditorPlugin::InitFile *m_glsl_120_vert;
-    GLSLEditorPlugin::InitFile *m_glsl_120_common;
-    GLSLEditorPlugin::InitFile *m_glsl_es_100_frag;
-    GLSLEditorPlugin::InitFile *m_glsl_es_100_vert;
-    GLSLEditorPlugin::InitFile *m_glsl_es_100_common;
+    GlslEditorPlugin::InitFile *m_glsl_120_frag;
+    GlslEditorPlugin::InitFile *m_glsl_120_vert;
+    GlslEditorPlugin::InitFile *m_glsl_120_common;
+    GlslEditorPlugin::InitFile *m_glsl_es_100_frag;
+    GlslEditorPlugin::InitFile *m_glsl_es_100_vert;
+    GlslEditorPlugin::InitFile *m_glsl_es_100_common;
 };
 
-static GLSLEditorPluginPrivate *dd = 0;
-static GLSLEditorPlugin *m_instance = 0;
+static GlslEditorPluginPrivate *dd = 0;
+static GlslEditorPlugin *m_instance = 0;
 
-GLSLEditorPlugin::InitFile::~InitFile()
+GlslEditorPlugin::InitFile::~InitFile()
 {
     delete engine;
 }
 
-GLSLEditorPlugin::GLSLEditorPlugin()
+GlslEditorPlugin::GlslEditorPlugin()
 {
     m_instance = this;
-    dd = new GLSLEditorPluginPrivate;
+    dd = new GlslEditorPluginPrivate;
 }
 
-GLSLEditorPlugin::~GLSLEditorPlugin()
+GlslEditorPlugin::~GlslEditorPlugin()
 {
-    removeObject(dd->m_editor);
     delete dd;
     m_instance = 0;
 }
 
-bool GLSLEditorPlugin::initialize(const QStringList & /*arguments*/, QString *errorMessage)
+bool GlslEditorPlugin::initialize(const QStringList & /*arguments*/, QString *errorMessage)
 {
     if (!MimeDatabase::addMimeTypes(QLatin1String(":/glsleditor/GLSLEditor.mimetypes.xml"), errorMessage))
         return false;
 
-//    m_modelManager = new ModelManager(this);
-//    addAutoReleasedObject(m_modelManager);
+    addAutoReleasedObject(new GlslHoverHandler(this));
+    addAutoReleasedObject(new GlslEditorFactory);
+    addAutoReleasedObject(new GlslCompletionAssistProvider);
 
-    addAutoReleasedObject(new GLSLHoverHandler(this));
-
-    dd->m_editor = new GLSLEditorFactory(this);
-    addObject(dd->m_editor);
-
-    addAutoReleasedObject(new GLSLCompletionAssistProvider);
-
-    ActionContainer *contextMenu = ActionManager::createMenu(GLSLEditor::Constants::M_CONTEXT);
+    ActionContainer *contextMenu = ActionManager::createMenu(Constants::M_CONTEXT);
     ActionContainer *glslToolsMenu = ActionManager::createMenu(Id(Constants::M_TOOLS_GLSL));
     glslToolsMenu->setOnAllDisabledBehavior(ActionContainer::Hide);
     QMenu *menu = glslToolsMenu->menu();
@@ -168,7 +159,7 @@ bool GLSLEditorPlugin::initialize(const QStringList & /*arguments*/, QString *er
     FileIconProvider::registerIconOverlayForMimeType(":/glsleditor/images/glslfile.png", Constants::GLSL_MIMETYPE_VERT_ES);
     FileIconProvider::registerIconOverlayForMimeType(":/glsleditor/images/glslfile.png", Constants::GLSL_MIMETYPE_FRAG_ES);
 
-    IWizardFactory *wizard = new GLSLFileWizard(GLSLFileWizard::FragmentShaderES);
+    IWizardFactory *wizard = new GlslFileWizard(GlslFileWizard::FragmentShaderES);
     wizard->setWizardKind(IWizardFactory::FileWizard);
     wizard->setCategory(QLatin1String(Constants::WIZARD_CATEGORY_GLSL));
     wizard->setDisplayCategory(QCoreApplication::translate("GLSLEditor", Constants::WIZARD_TR_CATEGORY_GLSL));
@@ -181,7 +172,7 @@ bool GLSLEditorPlugin::initialize(const QStringList & /*arguments*/, QString *er
     wizard->setId(QLatin1String("F.GLSL"));
     addAutoReleasedObject(wizard);
 
-    wizard = new GLSLFileWizard(GLSLFileWizard::VertexShaderES);
+    wizard = new GlslFileWizard(GlslFileWizard::VertexShaderES);
     wizard->setWizardKind(IWizardFactory::FileWizard);
     wizard->setCategory(QLatin1String(Constants::WIZARD_CATEGORY_GLSL));
     wizard->setDisplayCategory(QCoreApplication::translate("GLSLEditor", Constants::WIZARD_TR_CATEGORY_GLSL));
@@ -194,7 +185,7 @@ bool GLSLEditorPlugin::initialize(const QStringList & /*arguments*/, QString *er
     wizard->setId(QLatin1String("G.GLSL"));
     addAutoReleasedObject(wizard);
 
-    wizard = new GLSLFileWizard(GLSLFileWizard::FragmentShaderDesktop);
+    wizard = new GlslFileWizard(GlslFileWizard::FragmentShaderDesktop);
     wizard->setWizardKind(IWizardFactory::FileWizard);
     wizard->setCategory(QLatin1String(Constants::WIZARD_CATEGORY_GLSL));
     wizard->setDisplayCategory(QCoreApplication::translate("GLSLEditor", Constants::WIZARD_TR_CATEGORY_GLSL));
@@ -207,7 +198,7 @@ bool GLSLEditorPlugin::initialize(const QStringList & /*arguments*/, QString *er
     wizard->setId(QLatin1String("J.GLSL"));
     addAutoReleasedObject(wizard);
 
-    wizard = new GLSLFileWizard(GLSLFileWizard::VertexShaderDesktop);
+    wizard = new GlslFileWizard(GlslFileWizard::VertexShaderDesktop);
     wizard->setWizardKind(IWizardFactory::FileWizard);
     wizard->setCategory(QLatin1String(Constants::WIZARD_CATEGORY_GLSL));
     wizard->setDisplayCategory(QCoreApplication::translate("GLSLEditor", Constants::WIZARD_TR_CATEGORY_GLSL));
@@ -220,24 +211,24 @@ bool GLSLEditorPlugin::initialize(const QStringList & /*arguments*/, QString *er
     wizard->setId(QLatin1String("K.GLSL"));
     addAutoReleasedObject(wizard);
 
-    auto hf = new TextEditor::HighlighterFactory;
-    hf->setProductType<Highlighter>();
-    hf->setId(GLSLEditor::Constants::C_GLSLEDITOR_ID);
-    hf->addMimeType(GLSLEditor::Constants::GLSL_MIMETYPE);
-    hf->addMimeType(GLSLEditor::Constants::GLSL_MIMETYPE_VERT);
-    hf->addMimeType(GLSLEditor::Constants::GLSL_MIMETYPE_FRAG);
-    hf->addMimeType(GLSLEditor::Constants::GLSL_MIMETYPE_VERT_ES);
-    hf->addMimeType(GLSLEditor::Constants::GLSL_MIMETYPE_FRAG_ES);
+    auto hf = new HighlighterFactory;
+    hf->setProductType<GlslHighlighter>();
+    hf->setId(Constants::C_GLSLEDITOR_ID);
+    hf->addMimeType(Constants::GLSL_MIMETYPE);
+    hf->addMimeType(Constants::GLSL_MIMETYPE_VERT);
+    hf->addMimeType(Constants::GLSL_MIMETYPE_FRAG);
+    hf->addMimeType(Constants::GLSL_MIMETYPE_VERT_ES);
+    hf->addMimeType(Constants::GLSL_MIMETYPE_FRAG_ES);
     addAutoReleasedObject(hf);
 
     return true;
 }
 
-void GLSLEditorPlugin::extensionsInitialized()
+void GlslEditorPlugin::extensionsInitialized()
 {
 }
 
-ExtensionSystem::IPlugin::ShutdownFlag GLSLEditorPlugin::aboutToShutdown()
+ExtensionSystem::IPlugin::ShutdownFlag GlslEditorPlugin::aboutToShutdown()
 {
     // delete GLSL::Icons::instance(); // delete object held by singleton
     return IPlugin::aboutToShutdown();
@@ -251,7 +242,7 @@ static QByteArray glslFile(const QString &fileName)
     return QByteArray();
 }
 
-static void parseGlslFile(const QString &fileName, GLSLEditorPlugin::InitFile *initFile)
+static void parseGlslFile(const QString &fileName, GlslEditorPlugin::InitFile *initFile)
 {
     // Parse the builtins for any langugage variant so we can use all keywords.
     const int variant = GLSL::Lexer::Variant_All;
@@ -262,16 +253,16 @@ static void parseGlslFile(const QString &fileName, GLSLEditorPlugin::InitFile *i
     initFile->ast = parser.parse();
 }
 
-static GLSLEditorPlugin::InitFile *getInitFile(const char *fileName, GLSLEditorPlugin::InitFile **initFile)
+static GlslEditorPlugin::InitFile *getInitFile(const char *fileName, GlslEditorPlugin::InitFile **initFile)
 {
     if (*initFile)
         return *initFile;
-    *initFile = new GLSLEditorPlugin::InitFile;
+    *initFile = new GlslEditorPlugin::InitFile;
     parseGlslFile(QLatin1String(fileName), *initFile);
     return *initFile;
 }
 
-const GLSLEditorPlugin::InitFile *GLSLEditorPlugin::fragmentShaderInit(int variant)
+const GlslEditorPlugin::InitFile *GlslEditorPlugin::fragmentShaderInit(int variant)
 {
     if (variant & GLSL::Lexer::Variant_GLSL_120)
         return getInitFile("glsl_120.frag", &dd->m_glsl_120_frag);
@@ -279,7 +270,7 @@ const GLSLEditorPlugin::InitFile *GLSLEditorPlugin::fragmentShaderInit(int varia
         return getInitFile("glsl_es_100.frag", &dd->m_glsl_es_100_frag);
 }
 
-const GLSLEditorPlugin::InitFile *GLSLEditorPlugin::vertexShaderInit(int variant)
+const GlslEditorPlugin::InitFile *GlslEditorPlugin::vertexShaderInit(int variant)
 {
     if (variant & GLSL::Lexer::Variant_GLSL_120)
         return getInitFile("glsl_120.vert", &dd->m_glsl_120_vert);
@@ -287,7 +278,7 @@ const GLSLEditorPlugin::InitFile *GLSLEditorPlugin::vertexShaderInit(int variant
         return getInitFile("glsl_es_100.vert", &dd->m_glsl_es_100_vert);
 }
 
-const GLSLEditorPlugin::InitFile *GLSLEditorPlugin::shaderInit(int variant)
+const GlslEditorPlugin::InitFile *GlslEditorPlugin::shaderInit(int variant)
 {
     if (variant & GLSL::Lexer::Variant_GLSL_120)
         return getInitFile("glsl_120_common.glsl", &dd->m_glsl_120_common);
@@ -296,6 +287,4 @@ const GLSLEditorPlugin::InitFile *GLSLEditorPlugin::shaderInit(int variant)
 }
 
 } // namespace Internal
-} // namespace GLSLEditor
-
-Q_EXPORT_PLUGIN(GLSLEditor::Internal::GLSLEditorPlugin)
+} // namespace GlslEditor

@@ -30,50 +30,17 @@
 #ifndef JAVAEDITOR_H
 #define JAVAEDITOR_H
 
-#include <texteditor/basetextdocument.h>
 #include <texteditor/basetexteditor.h>
-#include <utils/uncommentselection.h>
 
 namespace Android {
 namespace Internal {
 
-class JavaEditorFactory;
-class JavaEditorWidget;
-
-class JavaEditor : public TextEditor::BaseTextEditor
+class JavaEditorFactory : public TextEditor::BaseTextEditorFactory
 {
     Q_OBJECT
 
 public:
-    JavaEditor(JavaEditorWidget *);
-
-    Core::IEditor *duplicate();
-    TextEditor::CompletionAssistProvider *completionAssistProvider();
-};
-
-class JavaEditorWidget : public TextEditor::BaseTextEditorWidget
-{
-    Q_OBJECT
-
-public:
-    JavaEditorWidget(QWidget *parent = 0);
-    JavaEditorWidget(JavaEditorWidget *other);
-
-protected:
-    TextEditor::BaseTextEditor *createEditor();
-
-private:
-    JavaEditorWidget(BaseTextEditorWidget *); // avoid stupidity
-};
-
-class JavaDocument : public TextEditor::BaseTextDocument
-{
-    Q_OBJECT
-
-public:
-    JavaDocument();
-    QString defaultPath() const;
-    QString suggestedFileName() const;
+    JavaEditorFactory();
 };
 
 } // namespace Internal

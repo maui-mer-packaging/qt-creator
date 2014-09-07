@@ -64,7 +64,7 @@ class GitSubmitEditorWidget : public VcsBase::SubmitEditorWidget
     Q_OBJECT
 
 public:
-    explicit GitSubmitEditorWidget(QWidget *parent = 0);
+    GitSubmitEditorWidget();
 
     GitSubmitEditorPanelData panelData() const;
     QString amendSHA1() const;
@@ -100,6 +100,8 @@ private:
     LogChangeWidget *m_logChangeWidget;
     Ui::GitSubmitPanel m_gitSubmitPanelUi;
     QValidator *m_emailValidator;
+    QString m_originalAuthor;
+    QString m_originalEmail;
     bool m_hasUnmerged;
     bool m_isInitialized;
 };

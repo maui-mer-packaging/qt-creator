@@ -39,6 +39,9 @@
 #include <coreplugin/documentmanager.h>
 #include <coreplugin/icontext.h>
 #include <coreplugin/id.h>
+#include <coreplugin/icore.h>
+#include <coreplugin/iversioncontrol.h>
+#include <coreplugin/vcsmanager.h>
 #include <coreplugin/messagemanager.h>
 #include <coreplugin/progressmanager/progressmanager.h>
 #include <coreplugin/mimedatabase.h>
@@ -68,6 +71,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QMessageBox>
 #include <QVariantMap>
 
 using namespace Core;
@@ -90,7 +94,6 @@ static const char CONFIG_SYSTEM_INCLUDEPATHS[] = "systemIncludePaths";
 static const char CONFIG_FRAMEWORKPATHS[] = "frameworkPaths";
 static const char CONFIG_SYSTEM_FRAMEWORKPATHS[] = "systemFrameworkPaths";
 static const char CONFIG_PRECOMPILEDHEADER[] = "precompiledHeader";
-static const char CONFIGURATION_PATH[] = "<configuration>";
 
 // --------------------------------------------------------------------
 // QbsProject:
@@ -131,6 +134,11 @@ QbsProject::~QbsProject()
 {
     m_codeModelFuture.cancel();
     delete m_qbsProjectParser;
+    if (m_qbsUpdateFutureInterface) {
+        m_qbsUpdateFutureInterface->reportCanceled();
+        delete m_qbsUpdateFutureInterface;
+        m_qbsUpdateFutureInterface = 0;
+    }
 
     // Deleting the root node triggers a few things, make sure rootProjectNode
     // returns 0 already
@@ -224,6 +232,27 @@ private:
     bool m_wasInDocumentManager;
 };
 
+bool QbsProject::ensureWriteableQbsFile(const QString &file)
+{
+    // Ensure that the file is not read only
+    QFileInfo fi(file);
+    if (!fi.isWritable()) {
+        // Try via vcs manager
+        Core::IVersionControl *versionControl =
+            Core::VcsManager::findVersionControlForDirectory(fi.absolutePath());
+        if (!versionControl || !versionControl->vcsOpen(file)) {
+            bool makeWritable = QFile::setPermissions(file, fi.permissions() | QFile::WriteUser);
+            if (!makeWritable) {
+                QMessageBox::warning(Core::ICore::mainWindow(),
+                                     tr("Failed!"),
+                                     tr("Could not write project file %1.").arg(file));
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 bool QbsProject::addFilesToProduct(QbsBaseProjectNode *node, const QStringList &filePaths,
         const qbs::ProductData &productData, const qbs::GroupData &groupData, QStringList *notAdded)
 {
@@ -231,6 +260,7 @@ bool QbsProject::addFilesToProduct(QbsBaseProjectNode *node, const QStringList &
     QStringList allPaths = groupData.allFilePaths();
     const QString productFilePath = productData.location().fileName();
     ChangeExpector expector(productFilePath, m_qbsDocuments);
+    ensureWriteableQbsFile(productFilePath);
     foreach (const QString &path, filePaths) {
         qbs::ErrorInfo err = m_qbsProject.addFiles(productData, groupData, QStringList() << path);
         if (err.hasError()) {
@@ -256,6 +286,7 @@ bool QbsProject::removeFilesFromProduct(QbsBaseProjectNode *node, const QStringL
     QStringList allPaths = groupData.allFilePaths();
     const QString productFilePath = productData.location().fileName();
     ChangeExpector expector(productFilePath, m_qbsDocuments);
+    ensureWriteableQbsFile(productFilePath);
     foreach (const QString &path, filePaths) {
         qbs::ErrorInfo err
                 = m_qbsProject.removeFiles(productData, groupData, QStringList() << path);
@@ -613,13 +644,8 @@ void QbsProject::updateCppCodeModel(const qbs::ProjectData &prj)
     if (!prj.isValid())
         return;
 
-    Kit *k = 0;
-    QtSupport::BaseQtVersion *qtVersion = 0;
-    if (Target *target = activeTarget())
-        k = target->kit();
-    else
-        k = KitManager::defaultKit();
-    qtVersion = QtSupport::QtKitInformation::qtVersion(k);
+    QtSupport::BaseQtVersion *qtVersion =
+            QtSupport::QtKitInformation::qtVersion(activeTarget()->kit());
 
     CppTools::CppModelManagerInterface *modelmanager =
         CppTools::CppModelManagerInterface::instance();
@@ -627,30 +653,31 @@ void QbsProject::updateCppCodeModel(const qbs::ProjectData &prj)
     if (!modelmanager)
         return;
 
-    CppTools::CppModelManagerInterface::ProjectInfo pinfo = modelmanager->projectInfo(this);
+    CppTools::ProjectInfo pinfo = modelmanager->projectInfo(this);
     pinfo.clearProjectParts();
-    CppTools::ProjectPart::QtVersion qtVersionForPart
-            = CppTools::ProjectPart::NoQt;
+
+    CppTools::ProjectPartBuilder ppBuilder(pinfo);
+
     if (qtVersion) {
         if (qtVersion->qtVersion() < QtSupport::QtVersionNumber(5,0,0))
-            qtVersionForPart = CppTools::ProjectPart::Qt4;
+            ppBuilder.setQtVersion(CppTools::ProjectPart::Qt4);
         else
-            qtVersionForPart = CppTools::ProjectPart::Qt5;
+            ppBuilder.setQtVersion(CppTools::ProjectPart::Qt5);
+    } else {
+        ppBuilder.setQtVersion(CppTools::ProjectPart::NoQt);
     }
 
     QHash<QString, QString> uiFiles;
-    QStringList allFiles;
     foreach (const qbs::ProductData &prd, prj.allProducts()) {
         foreach (const qbs::GroupData &grp, prd.groups()) {
             const qbs::PropertyMap &props = grp.properties();
 
-            const QStringList cxxFlags = props.getModulePropertiesAsStringList(
-                        QLatin1String(CONFIG_CPP_MODULE),
-                        QLatin1String(CONFIG_CXXFLAGS));
-
-            const QStringList cFlags = props.getModulePropertiesAsStringList(
-                        QLatin1String(CONFIG_CPP_MODULE),
-                        QLatin1String(CONFIG_CFLAGS));
+            ppBuilder.setCxxFlags(props.getModulePropertiesAsStringList(
+                                      QLatin1String(CONFIG_CPP_MODULE),
+                                      QLatin1String(CONFIG_CXXFLAGS)));
+            ppBuilder.setCFlags(props.getModulePropertiesAsStringList(
+                                    QLatin1String(CONFIG_CPP_MODULE),
+                                    QLatin1String(CONFIG_CFLAGS)));
 
             QStringList list = props.getModulePropertiesAsStringList(
                         QLatin1String(CONFIG_CPP_MODULE),
@@ -663,6 +690,7 @@ void QbsProject::updateCppCodeModel(const qbs::ProjectData &prj)
                     data[pos] = ' ';
                 grpDefines += (QByteArray("#define ") + data + '\n');
             }
+            ppBuilder.setDefines(grpDefines);
 
             list = props.getModulePropertiesAsStringList(QLatin1String(CONFIG_CPP_MODULE),
                                                          QLatin1String(CONFIG_INCLUDEPATHS));
@@ -683,22 +711,18 @@ void QbsProject::updateCppCodeModel(const qbs::ProjectData &prj)
                             FileName::fromUserInput(p).toString(),
                             CppTools::ProjectPart::HeaderPath::FrameworkPath);
 
+            ppBuilder.setHeaderPaths(grpHeaderPaths);
+
             const QString pch = props.getModuleProperty(QLatin1String(CONFIG_CPP_MODULE),
                     QLatin1String(CONFIG_PRECOMPILEDHEADER)).toString();
+            ppBuilder.setPreCompiledHeaders(QStringList() << pch);
 
-            CppTools::ProjectPart::Ptr part(new CppTools::ProjectPart);
-            part->project = this;
-            part->displayName = grp.name();
-            part->projectFile = QString::fromLatin1("%1:%2:%3")
+            ppBuilder.setDisplayName(grp.name());
+            ppBuilder.setProjectFile(QString::fromLatin1("%1:%2:%3")
                     .arg(grp.location().fileName())
                     .arg(grp.location().line())
-                    .arg(grp.location().column());
-            part->evaluateToolchain(ToolChainKitInformation::toolChain(k),
-                                    cxxFlags,
-                                    cFlags,
-                                    SysRootKitInformation::sysRoot(k));
+                    .arg(grp.location().column()));
 
-            CppTools::ProjectFileAdder adder(part->files);
             foreach (const QString &file, grp.allFilePaths()) {
                 if (file.endsWith(QLatin1String(".ui"))) {
                     QStringList generated = m_rootProjectNode->qbsProject()
@@ -706,21 +730,14 @@ void QbsProject::updateCppCodeModel(const qbs::ProjectData &prj)
                     if (generated.count() == 1)
                         uiFiles.insert(file, generated.at(0));
                 }
-                if (adder.maybeAdd(file))
-                    allFiles.append(file);
             }
-            part->files << CppTools::ProjectFile(QLatin1String(CONFIGURATION_PATH),
-                                                  CppTools::ProjectFile::CXXHeader);
 
-            part->qtVersion = qtVersionForPart;
-            part->headerPaths += grpHeaderPaths;
-            part->precompiledHeaders = QStringList(pch);
-            part->projectDefines += grpDefines;
-            pinfo.appendProjectPart(part);
+            const QList<Core::Id> languages =
+                    ppBuilder.createProjectPartsForFiles(grp.allFilePaths());
+            foreach (Core::Id language, languages)
+                setProjectLanguage(language, true);
         }
     }
-
-    setProjectLanguage(ProjectExplorer::Constants::LANG_CXX, !allFiles.isEmpty());
 
     if (pinfo.projectParts().isEmpty())
         return;

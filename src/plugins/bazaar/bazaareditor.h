@@ -36,12 +36,12 @@
 namespace Bazaar {
 namespace Internal {
 
-class BazaarEditor : public VcsBase::VcsBaseEditorWidget
+class BazaarEditorWidget : public VcsBase::VcsBaseEditorWidget
 {
     Q_OBJECT
 
 public:
-    explicit BazaarEditor(const VcsBase::VcsBaseEditorParameters *type, QWidget *parent);
+    BazaarEditorWidget();
 
 private:
     QSet<QString> annotationChanges() const;

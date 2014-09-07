@@ -49,10 +49,7 @@
  */
 using namespace Core;
 using namespace CPlusPlus;
-using namespace CppEditor;
-using namespace CppEditor::Internal;
 using namespace CppEditor::Internal::Tests;
-using namespace CppTools;
 using namespace TextEditor;
 
 using CppTools::Tests::TestIncludePaths;
@@ -115,10 +112,6 @@ static QString &removeTrailingWhitespace(QString &input)
     return input;
 }
 
-} // namespace Tests
-} // namespace Internal
-} // namespace CppEditor
-
 /// The '@' in the originalSource is the position from where the quick-fix discovery is triggered.
 /// Exactly one TestFile must contain the cursor position marker '@' in the originalSource.
 QuickFixTestCase::QuickFixTestCase(const QList<QuickFixTestDocument::Ptr> &theTestFiles,
@@ -152,7 +145,7 @@ QuickFixTestCase::QuickFixTestCase(const QList<QuickFixTestDocument::Ptr> &theTe
     }
 
     // Update Code Model
-    QStringList filePaths;
+    QSet<QString> filePaths;
     foreach (const QuickFixTestDocument::Ptr &testFile, m_testFiles)
         filePaths << testFile->filePath();
     QVERIFY(parseFiles(filePaths));
@@ -259,9 +252,17 @@ QSharedPointer<TextEditor::QuickFixOperation> QuickFixTestCase::getFix(
     return results.isEmpty() ? QuickFixOperation::Ptr() : results.at(resultIndex);
 }
 
+} // namespace Tests
+} // namespace Internal
+
 typedef QSharedPointer<CppQuickFixFactory> CppQuickFixFactoryPtr;
 
-Q_DECLARE_METATYPE(CppQuickFixFactoryPtr)
+} // namespace CppEditor
+
+Q_DECLARE_METATYPE(CppEditor::CppQuickFixFactoryPtr)
+
+namespace CppEditor {
+namespace Internal {
 
 void CppEditorPlugin::test_quickfix_data()
 {
@@ -1416,7 +1417,35 @@ void CppEditorPlugin::test_quickfix_data()
     QTest::newRow("ConvertToPointer_noTriggerRValueRefs")
         << CppQuickFixFactoryPtr(new ConvertFromAndToPointer)
         << _("void foo(Narf &&@narf) {}\n")
-        << _("void foo(Narf &&@narf) {}\n");
+        << _();
+
+    QTest::newRow("ConvertToPointer_noTriggerGlobal")
+        << CppQuickFixFactoryPtr(new ConvertFromAndToPointer)
+        << _("int @global;\n")
+        << _();
+
+    QTest::newRow("ConvertToPointer_noTriggerClassMember")
+        << CppQuickFixFactoryPtr(new ConvertFromAndToPointer)
+        << _("struct C { int @member; };\n")
+        << _();
+
+    QTest::newRow("ConvertToPointer_noTriggerClassMember2")
+        << CppQuickFixFactoryPtr(new ConvertFromAndToPointer)
+        << _("void f() { struct C { int @member; }; }\n")
+        << _();
+
+    QTest::newRow("ConvertToPointer_functionOfFunctionLocalClass")
+        << CppQuickFixFactoryPtr(new ConvertFromAndToPointer)
+        << _("void f() {\n"
+             "    struct C {\n"
+             "        void g() { int @member; }\n"
+             "    };\n"
+             "}\n")
+        << _("void f() {\n"
+             "    struct C {\n"
+             "        void g() { int *member; }\n"
+             "    };\n"
+             "}\n");
 
     QTest::newRow("ConvertToPointer_redeclaredVariable_block")
         << CppQuickFixFactoryPtr(new ConvertFromAndToPointer)
@@ -1747,8 +1776,7 @@ void CppEditorPlugin::test_quickfix_InsertDefFromDecl_notTriggeringWhenDefinitio
     const QByteArray expected = original;
 
     InsertDefFromDecl factory;
-    QuickFixTestCase test(singleDocument(original, expected), &factory, ProjectPart::HeaderPaths(),
-                          1);
+    QuickFixTestCase(singleDocument(original, expected), &factory, ProjectPart::HeaderPaths(), 1);
 }
 
 /// Find right implementation file.
@@ -3781,3 +3809,24 @@ void CppEditorPlugin::test_quickfix_ExtractLiteralAsParameter_memberFunction_sep
     ExtractLiteralAsParameter factory;
     QuickFixTestCase(testFiles, &factory);
 }
+
+void CppEditorPlugin::test_quickfix_ExtractLiteralAsParameter_notTriggeringForInvalidCode()
+{
+    QList<QuickFixTestDocument::Ptr> testFiles;
+    QByteArray original;
+    QByteArray expected;
+
+    original =
+        "T(\"test\")\n"
+        "{\n"
+        "    const int i = @14;\n"
+        "}\n";
+    expected = original;
+    testFiles << QuickFixTestDocument::create("file.cpp", original, expected);
+
+    ExtractLiteralAsParameter factory;
+    QuickFixTestCase(testFiles, &factory);
+}
+
+} // namespace Internal
+} // namespace CppEditor

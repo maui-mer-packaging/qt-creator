@@ -195,6 +195,7 @@ struct ProjectExplorerPluginPrivate {
     QAction *m_newAction;
     QAction *m_loadAction;
     Utils::ParameterAction *m_unloadAction;
+    Utils::ParameterAction *m_unloadActionContextMenu;
     QAction *m_closeAllProjects;
     QAction *m_buildProjectOnlyAction;
     Utils::ParameterAction *m_buildAction;
@@ -269,6 +270,7 @@ struct ProjectExplorerPluginPrivate {
     bool m_shuttingDown;
     bool m_ignoreDocumentManagerChangedFile;
     QStringList m_arguments;
+    QList<ProjectPanelFactory *> m_panelFactories;
 };
 
 ProjectExplorerPluginPrivate::ProjectExplorerPluginPrivate() :
@@ -324,7 +326,6 @@ ProjectExplorerPlugin::~ProjectExplorerPlugin()
     delete d->m_kitManager; // remove all the profile informations
     delete d->m_toolChainManager;
     ProjectPanelFactory::destroyFactories();
-
     delete d;
 }
 
@@ -397,6 +398,7 @@ bool ProjectExplorerPlugin::initialize(const QStringList &arguments, QString *er
     KitManager::registerKitInformation(new DeviceKitInformation);
     KitManager::registerKitInformation(new ToolChainKitInformation);
     KitManager::registerKitInformation(new SysRootKitInformation);
+    KitManager::registerKitInformation(new EnvironmentKitInformation);
 
     addAutoReleasedObject(new Internal::ToolChainOptionsPage);
     addAutoReleasedObject(new KitOptionsPage);
@@ -724,7 +726,6 @@ bool ProjectExplorerPlugin::initialize(const QStringList &arguments, QString *er
     cmd->setDefaultKeySequence(QKeySequence());
 
 
-    // XXX same action?
     // unload action
     d->m_unloadAction = new Utils::ParameterAction(tr("Close Project"), tr("Close Project \"%1\""),
                                                       Utils::ParameterAction::EnabledWithParameter, this);
@@ -732,6 +733,14 @@ bool ProjectExplorerPlugin::initialize(const QStringList &arguments, QString *er
     cmd->setAttribute(Command::CA_UpdateText);
     cmd->setDescription(d->m_unloadAction->text());
     mfile->addAction(cmd, Core::Constants::G_FILE_PROJECT);
+
+    ActionContainer *munload =
+        ActionManager::createMenu(Constants::M_UNLOADPROJECTS);
+    munload->menu()->setTitle(tr("Close Project"));
+    munload->setOnAllDisabledBehavior(ActionContainer::Show);
+    mfile->addMenu(munload, Core::Constants::G_FILE_PROJECT);
+    connect(mfile->menu(), SIGNAL(aboutToShow()),
+        this, SLOT(updateUnloadProjectMenu()));
 
     // unload session action
     d->m_closeAllProjects = new QAction(tr("Close All Projects and Editors"), this);
@@ -906,7 +915,12 @@ bool ProjectExplorerPlugin::initialize(const QStringList &arguments, QString *er
     msubProjectContextMenu->addAction(cmd, Constants::G_PROJECT_FILES);
 
     // unload project again, in right position
-    mprojectContextMenu->addAction(ActionManager::command(Constants::UNLOAD), Constants::G_PROJECT_LAST);
+    d->m_unloadActionContextMenu = new Utils::ParameterAction(tr("Close Project"), tr("Close Project \"%1\""),
+                                                              Utils::ParameterAction::EnabledWithParameter, this);
+    cmd = ActionManager::registerAction(d->m_unloadActionContextMenu, Constants::UNLOADCM, globalcontext);
+    cmd->setAttribute(Command::CA_UpdateText);
+    cmd->setDescription(d->m_unloadActionContextMenu->text());
+    mprojectContextMenu->addAction(cmd, Constants::G_PROJECT_LAST);
 
     // remove file action
     d->m_removeFileAction = new QAction(tr("Remove File..."), this);
@@ -1062,6 +1076,7 @@ bool ProjectExplorerPlugin::initialize(const QStringList &arguments, QString *er
     connect(d->m_runWithoutDeployAction, SIGNAL(triggered()), this, SLOT(runProjectWithoutDeploy()));
     connect(d->m_cancelBuildAction, SIGNAL(triggered()), this, SLOT(cancelBuild()));
     connect(d->m_unloadAction, SIGNAL(triggered()), this, SLOT(unloadProject()));
+    connect(d->m_unloadActionContextMenu, SIGNAL(triggered()), this, SLOT(unloadProject()));
     connect(d->m_closeAllProjects, SIGNAL(triggered()), this, SLOT(closeAllProjects()));
     connect(d->m_addNewFileAction, SIGNAL(triggered()), this, SLOT(addNewFile()));
     connect(d->m_addExistingFilesAction, SIGNAL(triggered()), this, SLOT(addExistingFiles()));
@@ -1208,13 +1223,18 @@ void ProjectExplorerPlugin::unloadProject()
     if (debug)
         qDebug() << "ProjectExplorerPlugin::unloadProject";
 
-    if (BuildManager::isBuilding(d->m_currentProject)) {
+    unloadProject(d->m_currentProject);
+}
+
+void ProjectExplorerPlugin::unloadProject(Project *project)
+{
+    if (BuildManager::isBuilding(project)) {
         QMessageBox box;
         QPushButton *closeAnyway = box.addButton(tr("Cancel Build && Unload"), QMessageBox::AcceptRole);
         QPushButton *cancelClose = box.addButton(tr("Do Not Unload"), QMessageBox::RejectRole);
         box.setDefaultButton(cancelClose);
-        box.setWindowTitle(tr("Unload Project %1?").arg(d->m_currentProject->displayName()));
-        box.setText(tr("The project %1 is currently being built.").arg(d->m_currentProject->displayName()));
+        box.setWindowTitle(tr("Unload Project %1?").arg(project->displayName()));
+        box.setText(tr("The project %1 is currently being built.").arg(project->displayName()));
         box.setInformativeText(tr("Do you want to cancel the build process and unload the project anyway?"));
         box.exec();
         if (box.clickedButton() != closeAnyway)
@@ -1222,7 +1242,7 @@ void ProjectExplorerPlugin::unloadProject()
         BuildManager::cancel();
     }
 
-    IDocument *document = d->m_currentProject->document();
+    IDocument *document = project->document();
 
     if (!document || document->filePath().isEmpty()) //nothing to save?
         return;
@@ -1230,12 +1250,8 @@ void ProjectExplorerPlugin::unloadProject()
     if (!DocumentManager::saveModifiedDocumentSilently(document))
         return;
 
-    addToRecentProjects(document->filePath(), d->m_currentProject->displayName());
-    unloadProject(d->m_currentProject);
-}
+    addToRecentProjects(document->filePath(), project->displayName());
 
-void ProjectExplorerPlugin::unloadProject(Project *project)
-{
     SessionManager::removeProject(project);
     updateActions();
 }
@@ -2012,6 +2028,7 @@ void ProjectExplorerPlugin::updateActions()
     QString projectNameContextMenu = d->m_currentProject ? d->m_currentProject->displayName() : QString();
 
     d->m_unloadAction->setParameter(projectNameContextMenu);
+    d->m_unloadActionContextMenu->setParameter(projectNameContextMenu);
 
     // Normal actions
     d->m_buildAction->setParameter(projectName);
@@ -2059,6 +2076,12 @@ void ProjectExplorerPlugin::updateActions()
 
     // Session actions
     d->m_closeAllProjects->setEnabled(SessionManager::hasProjects());
+    d->m_unloadAction->setVisible(SessionManager::projects().size() <= 1);
+    d->m_unloadActionContextMenu->setEnabled(SessionManager::hasProjects());
+
+    ActionContainer *aci =
+        ActionManager::actionContainer(Constants::M_UNLOADPROJECTS);
+    aci->menu()->menuAction()->setVisible(SessionManager::projects().size() > 1);
 
     d->m_buildSessionAction->setEnabled(buildSessionState.first);
     d->m_rebuildSessionAction->setEnabled(buildSessionState.first);
@@ -2618,72 +2641,77 @@ void ProjectExplorerPlugin::updateDeployActions()
     emit updateRunActions();
 }
 
-bool ProjectExplorerPlugin::canRun(Project *project, RunMode runMode)
+bool ProjectExplorerPlugin::canRun(Project *project, RunMode runMode, QString *whyNot)
 {
-    if (!project ||
-        !project->activeTarget() ||
-        !project->activeTarget()->activeRunConfiguration()) {
+    if (!project) {
+        if (whyNot)
+            *whyNot = tr("No active project.");
         return false;
     }
 
-    if (d->m_projectExplorerSettings.buildBeforeDeploy
-            && d->m_projectExplorerSettings.deployBeforeRun
-            && hasBuildSettings(project)
-            && !buildSettingsEnabled(project).first)
+    if (project->needsConfiguration()) {
+        if (whyNot)
+            *whyNot = tr("The project \"%1\" is not configured.").arg(project->displayName());
         return false;
+    }
 
+    Target *target = project->activeTarget();
+    if (!target) {
+        if (whyNot)
+            *whyNot = tr("The project \"%1\" has no active kit.").arg(project->displayName());
+        return false;
+    }
 
-    RunConfiguration *activeRC = project->activeTarget()->activeRunConfiguration();
+    RunConfiguration *activeRC = target->activeRunConfiguration();
+    if (!activeRC) {
+        if (whyNot)
+            *whyNot = tr("The kit \"%1\" for the project \"%2\" has no active run configuration.")
+                .arg(target->displayName(), project->displayName());
+        return false;
+    }
 
-    bool canRun = findRunControlFactory(activeRC, runMode)
-                  && activeRC->isEnabled();
-    return canRun && !BuildManager::isBuilding();
-}
-
-QString ProjectExplorerPlugin::cannotRunReason(Project *project, RunMode runMode)
-{
-    if (!project)
-        return tr("No active project.");
-
-    if (project->needsConfiguration())
-        return tr("The project %1 is not configured.").arg(project->displayName());
-
-    if (!project->activeTarget())
-        return tr("The project \"%1\" has no active kit.").arg(project->displayName());
-
-    if (!project->activeTarget()->activeRunConfiguration())
-        return tr("The kit \"%1\" for the project \"%2\" has no active run configuration.")
-                .arg(project->activeTarget()->displayName(), project->displayName());
-
-
-    if (d->m_projectExplorerSettings.buildBeforeDeploy
-            && d->m_projectExplorerSettings.deployBeforeRun
-            && hasBuildSettings(project)) {
-        QPair<bool, QString> buildState = buildSettingsEnabled(project);
-        if (!buildState.first)
-            return buildState.second;
+    if (!activeRC->isEnabled()) {
+        if (whyNot)
+            *whyNot = activeRC->disabledReason();
+        return false;
     }
 
 
-    RunConfiguration *activeRC = project->activeTarget()->activeRunConfiguration();
-    if (!activeRC->isEnabled())
-        return activeRC->disabledReason();
+    if (m_instance->d->m_projectExplorerSettings.buildBeforeDeploy
+            && m_instance->d->m_projectExplorerSettings.deployBeforeRun
+            && m_instance->hasBuildSettings(project)) {
+        QPair<bool, QString> buildState = m_instance->buildSettingsEnabled(project);
+        if (!buildState.first) {
+            if (whyNot)
+                *whyNot = buildState.second;
+            return false;
+        }
+    }
+
 
     // shouldn't actually be shown to the user...
-    if (!findRunControlFactory(activeRC, runMode))
-        return tr("Cannot run \"%1\".").arg(activeRC->displayName());
+    if (!m_instance->findRunControlFactory(activeRC, runMode)) {
+        if (whyNot)
+            *whyNot = tr("Cannot run \"%1\".").arg(activeRC->displayName());
+        return false;
+    }
 
-    if (BuildManager::isBuilding())
-        return tr("A build is still in progress.");
-    return QString();
+    if (BuildManager::isBuilding()) {
+        if (whyNot)
+            *whyNot = tr("A build is still in progress.");
+        return false;
+    }
+
+    return true;
 }
 
 void ProjectExplorerPlugin::slotUpdateRunActions()
 {
     Project *project = SessionManager::startupProject();
-    const bool state = canRun(project, NormalRunMode);
+    QString whyNot;
+    const bool state = canRun(project, NormalRunMode, &whyNot);
     d->m_runAction->setEnabled(state);
-    d->m_runAction->setToolTip(cannotRunReason(project, NormalRunMode));
+    d->m_runAction->setToolTip(whyNot);
     d->m_runWithoutDeployAction->setEnabled(state);
 }
 
@@ -2718,6 +2746,18 @@ void ProjectExplorerPlugin::addToRecentProjects(const QString &fileName, const Q
     QFileInfo fi(prettyFileName);
     d->m_lastOpenDirectory = fi.absolutePath();
     emit recentProjectsChanged();
+}
+
+void ProjectExplorerPlugin::updateUnloadProjectMenu()
+{
+    ActionContainer *aci = ActionManager::actionContainer(Constants::M_UNLOADPROJECTS);
+    QMenu *menu = aci->menu();
+    menu->clear();
+    foreach (Project *project, SessionManager::projects()) {
+        QAction *action = menu->addAction(tr("Close Project \"%1\"").arg(project->displayName()));
+        connect(action, &QAction::triggered,
+                this, [project, this](){ unloadProject(project); } );
+    }
 }
 
 void ProjectExplorerPlugin::updateRecentProjectMenu()
@@ -3022,7 +3062,7 @@ void ProjectExplorerPlugin::addExistingFiles(FolderNode *folderNode, const QStri
     if (!notAdded.isEmpty()) {
         QString message = tr("Could not add following files to project %1:").arg(folderNode->projectNode()->displayName());
         message += QLatin1Char('\n');
-        QString files = notAdded.join(QString(QLatin1Char('\n')));
+        QString files = notAdded.join(QLatin1Char('\n'));
         QMessageBox::warning(ICore::mainWindow(), tr("Adding Files to Project Failed"),
                              message + files);
         foreach (const QString &file, notAdded)
@@ -3153,12 +3193,13 @@ void ProjectExplorerPlugin::renameFile(Node *node, const QString &to)
     if (Core::FileUtils::renameFile(orgFilePath, newFilePath)) {
         // Tell the project plugin about rename
         FolderNode *folderNode = node->parentFolderNode();
+        QString projectDisplayName = folderNode->projectNode()->displayName();
         if (!folderNode->renameFile(orgFilePath, newFilePath)) {
             QMessageBox::warning(ICore::mainWindow(), tr("Project Editing Failed"),
                                  tr("The file %1 was renamed to %2, but the project file %3 could not be automatically changed.")
                                  .arg(orgFilePath)
                                  .arg(newFilePath)
-                                 .arg(folderNode->projectNode()->displayName()));
+                                 .arg(projectDisplayName));
         } else {
             setCurrent(SessionManager::projectForFile(newFilePath), newFilePath, 0);
         }
@@ -3235,5 +3276,3 @@ QList<QPair<QString, QString> > ProjectExplorerPlugin::recentProjects()
 {
     return d->m_recentProjects;
 }
-
-Q_EXPORT_PLUGIN(ProjectExplorerPlugin)

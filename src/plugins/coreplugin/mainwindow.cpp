@@ -446,6 +446,7 @@ void MainWindow::registerDefaultContainers()
     mwindow->appendGroup(Constants::G_WINDOW_PANES);
     mwindow->appendGroup(Constants::G_WINDOW_SPLIT);
     mwindow->appendGroup(Constants::G_WINDOW_NAVIGATE);
+    mwindow->appendGroup(Constants::G_WINDOW_LIST);
     mwindow->appendGroup(Constants::G_WINDOW_OTHER);
 
     // Help Menu
@@ -553,6 +554,7 @@ void MainWindow::registerDefaultActions()
     m_exitAction = new QAction(icon, tr("E&xit"), this);
     cmd = ActionManager::registerAction(m_exitAction, Constants::EXIT, globalContext);
     cmd->setDefaultKeySequence(QKeySequence(tr("Ctrl+Q")));
+    cmd->action()->setMenuRole(QAction::QuitRole);
     mfile->addAction(cmd, Constants::G_FILE_OTHER);
     connect(m_exitAction, SIGNAL(triggered()), this, SLOT(exit()));
 
@@ -627,6 +629,8 @@ void MainWindow::registerDefaultActions()
     }
     mtools->addAction(cmd, Constants::G_TOOLS_OPTIONS);
     connect(m_optionsAction, SIGNAL(triggered()), this, SLOT(showOptionsDialog()));
+
+    mwindow->addSeparator(globalContext, Constants::G_WINDOW_LIST);
 
     if (UseMacShortcuts) {
         // Minimize Action

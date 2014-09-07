@@ -29,10 +29,12 @@
 
 #include "cppeditorplugin.h"
 
+#include "cppautocompleter.h"
 #include "cppclasswizard.h"
 #include "cppcodemodelinspectordialog.h"
 #include "cppeditorconstants.h"
 #include "cppeditor.h"
+#include "cppeditordocument.h"
 #include "cppeditoroutline.h"
 #include "cppfilewizard.h"
 #include "cpphighlighter.h"
@@ -54,7 +56,6 @@
 #include <cpptools/cpptoolsconstants.h>
 #include <texteditor/texteditoractionhandler.h>
 #include <texteditor/texteditorconstants.h>
-#include <texteditor/texteditorsettings.h>
 #include <texteditor/highlighterfactory.h>
 
 #include <utils/hostosinfo.h>
@@ -63,8 +64,10 @@
 #include <QStringList>
 
 using namespace Core;
-using namespace CppEditor;
-using namespace CppEditor::Internal;
+using namespace TextEditor;
+
+namespace CppEditor {
+namespace Internal {
 
 void registerQuickFixes(ExtensionSystem::IPlugin *plugIn);
 
@@ -72,35 +75,36 @@ enum { QUICKFIX_INTERVAL = 20 };
 
 //////////////////////////// CppEditorFactory /////////////////////////////
 
-CppEditorFactory::CppEditorFactory(CppEditorPlugin *owner) :
-    m_owner(owner)
+class CppEditorFactory : public BaseTextEditorFactory
 {
-    setId(CppEditor::Constants::CPPEDITOR_ID);
-    setDisplayName(qApp->translate("OpenWith::Editors", CppEditor::Constants::CPPEDITOR_DISPLAY_NAME));
-    addMimeType(CppEditor::Constants::C_SOURCE_MIMETYPE);
-    addMimeType(CppEditor::Constants::C_HEADER_MIMETYPE);
-    addMimeType(CppEditor::Constants::CPP_SOURCE_MIMETYPE);
-    addMimeType(CppEditor::Constants::CPP_HEADER_MIMETYPE);
+public:
+    CppEditorFactory()
+    {
+        setId(Constants::CPPEDITOR_ID);
+        setDisplayName(qApp->translate("OpenWith::Editors", Constants::CPPEDITOR_DISPLAY_NAME));
+        addMimeType(Constants::C_SOURCE_MIMETYPE);
+        addMimeType(Constants::C_HEADER_MIMETYPE);
+        addMimeType(Constants::CPP_SOURCE_MIMETYPE);
+        addMimeType(Constants::CPP_HEADER_MIMETYPE);
 
-    new TextEditor::TextEditorActionHandler(this, CppEditor::Constants::C_CPPEDITOR,
-        TextEditor::TextEditorActionHandler::Format
-        | TextEditor::TextEditorActionHandler::UnCommentSelection
-        | TextEditor::TextEditorActionHandler::UnCollapseAll
-        | TextEditor::TextEditorActionHandler::FollowSymbolUnderCursor);
+        setDocumentCreator([]() { return new CppEditorDocument; });
+        setEditorWidgetCreator([]() { return new CppEditorWidget; });
+        setEditorCreator([]() { return new CppEditor; });
+        setAutoCompleterCreator([]() { return new CppAutoCompleter; });
+        setCommentStyle(Utils::CommentDefinition::CppStyle);
 
-    if (!Utils::HostOsInfo::isMacHost() && !Utils::HostOsInfo::isWindowsHost()) {
-        FileIconProvider::registerIconOverlayForMimeType(":/cppeditor/images/qt_cpp.png", CppEditor::Constants::CPP_SOURCE_MIMETYPE);
-        FileIconProvider::registerIconOverlayForMimeType(":/cppeditor/images/qt_c.png", CppEditor::Constants::C_SOURCE_MIMETYPE);
-        FileIconProvider::registerIconOverlayForMimeType(":/cppeditor/images/qt_h.png", CppEditor::Constants::CPP_HEADER_MIMETYPE);
+        setEditorActionHandlers(TextEditorActionHandler::Format
+                              | TextEditorActionHandler::UnCommentSelection
+                              | TextEditorActionHandler::UnCollapseAll
+                              | TextEditorActionHandler::FollowSymbolUnderCursor);
+
+        if (!Utils::HostOsInfo::isMacHost() && !Utils::HostOsInfo::isWindowsHost()) {
+            FileIconProvider::registerIconOverlayForMimeType(":/cppeditor/images/qt_cpp.png", Constants::CPP_SOURCE_MIMETYPE);
+            FileIconProvider::registerIconOverlayForMimeType(":/cppeditor/images/qt_c.png", Constants::C_SOURCE_MIMETYPE);
+            FileIconProvider::registerIconOverlayForMimeType(":/cppeditor/images/qt_h.png", Constants::CPP_HEADER_MIMETYPE);
+        }
     }
-}
-
-IEditor *CppEditorFactory::createEditor()
-{
-    CppEditorWidget *editor = new CppEditorWidget();
-    m_owner->initializeEditor(editor);
-    return editor->editor();
-}
+};
 
 ///////////////////////////////// CppEditorPlugin //////////////////////////////////
 
@@ -128,16 +132,6 @@ CppEditorPlugin *CppEditorPlugin::instance()
     return m_instance;
 }
 
-void CppEditorPlugin::initializeEditor(CppEditorWidget *editor)
-{
-    editor->setLanguageSettingsId(CppTools::Constants::CPP_SETTINGS_ID);
-    TextEditor::TextEditorSettings::initializeEditor(editor);
-
-    // function combo box sorting
-    connect(this, SIGNAL(outlineSortingChanged(bool)),
-            editor->outline(), SLOT(setSorted(bool)));
-}
-
 void CppEditorPlugin::setSortedOutline(bool sorted)
 {
     m_sortedOutline = sorted;
@@ -159,7 +153,7 @@ bool CppEditorPlugin::initialize(const QStringList & /*arguments*/, QString *err
     if (!Core::MimeDatabase::addMimeTypes(QLatin1String(":/cppeditor/CppEditor.mimetypes.xml"), errorMessage))
         return false;
 
-    addAutoReleasedObject(new CppEditorFactory(this));
+    addAutoReleasedObject(new CppEditorFactory);
     addAutoReleasedObject(new CppHoverHandler);
     addAutoReleasedObject(new CppOutlineWidgetFactory);
     addAutoReleasedObject(new CppTypeHierarchyFactory);
@@ -168,16 +162,16 @@ bool CppEditorPlugin::initialize(const QStringList & /*arguments*/, QString *err
 
     auto hf = new TextEditor::HighlighterFactory;
     hf->setProductType<CppHighlighter>();
-    hf->setId(CppEditor::Constants::CPPEDITOR_ID);
-    hf->addMimeType(CppEditor::Constants::C_SOURCE_MIMETYPE);
-    hf->addMimeType(CppEditor::Constants::C_HEADER_MIMETYPE);
-    hf->addMimeType(CppEditor::Constants::CPP_SOURCE_MIMETYPE);
-    hf->addMimeType(CppEditor::Constants::CPP_HEADER_MIMETYPE);
+    hf->setId(Constants::CPPEDITOR_ID);
+    hf->addMimeType(Constants::C_SOURCE_MIMETYPE);
+    hf->addMimeType(Constants::C_HEADER_MIMETYPE);
+    hf->addMimeType(Constants::CPP_SOURCE_MIMETYPE);
+    hf->addMimeType(Constants::CPP_HEADER_MIMETYPE);
     addAutoReleasedObject(hf);
 
     m_quickFixProvider = new CppQuickFixAssistProvider;
     addAutoReleasedObject(m_quickFixProvider);
-    CppEditor::Internal::registerQuickFixes(this);
+    registerQuickFixes(this);
 
     QString trCat = QCoreApplication::translate(Constants::WIZARD_CATEGORY, Constants::WIZARD_TR_CATEGORY);
 
@@ -209,9 +203,9 @@ bool CppEditorPlugin::initialize(const QStringList & /*arguments*/, QString *err
     wizard->setId(QLatin1String("C.Header"));
     addAutoReleasedObject(wizard);
 
-    Context context(CppEditor::Constants::C_CPPEDITOR);
+    Context context(Constants::CPPEDITOR_ID);
 
-    ActionContainer *contextMenu = ActionManager::createMenu(CppEditor::Constants::M_CONTEXT);
+    ActionContainer *contextMenu = ActionManager::createMenu(Constants::M_CONTEXT);
 
     Command *cmd;
     ActionContainer *cppToolsMenu = ActionManager::actionContainer(CppTools::Constants::M_TOOLS_CPP);
@@ -427,4 +421,5 @@ void CppEditorPlugin::openIncludeHierarchy()
     }
 }
 
-Q_EXPORT_PLUGIN(CppEditorPlugin)
+} // namespace Internal
+} // namespace CppEditor

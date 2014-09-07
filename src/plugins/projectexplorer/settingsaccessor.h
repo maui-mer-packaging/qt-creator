@@ -105,7 +105,7 @@ public:
 
 protected:
     QVariantMap readFile(const Utils::FileName &path) const;
-    QVariantMap upgradeSettings(const QVariantMap &data, int toVersion) const;
+    QVariantMap upgradeSettings(const QVariantMap &data) const;
 
     ProceedInfo reportIssues(const QVariantMap &data, const Utils::FileName &path, QWidget *parent) const;
 
@@ -113,6 +113,8 @@ protected:
     virtual QVariantMap prepareToSaveSettings(const QVariantMap &data) const;
 
     virtual bool isBetterMatch(const QVariantMap &origData, const QVariantMap &newData) const;
+
+    virtual Utils::FileName backupName(const QVariantMap &data) const;
 
     virtual IssueInfo findIssues(const QVariantMap &data, const Utils::FileName &path) const;
 

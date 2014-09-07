@@ -33,70 +33,52 @@
 #include "androidconstants.h"
 #include "javacompletionassistprovider.h"
 
-#include <texteditor/texteditorsettings.h>
+#include <texteditor/basetextdocument.h>
+#include <texteditor/basetexteditor.h>
+#include <utils/uncommentselection.h>
+#include <coreplugin/editormanager/ieditorfactory.h>
+
+#include <texteditor/texteditoractionhandler.h>
 #include <texteditor/texteditorconstants.h>
 #include <texteditor/normalindenter.h>
-#include <texteditor/highlighterutils.h>
-#include <coreplugin/mimedatabase.h>
 #include <extensionsystem/pluginmanager.h>
 
 #include <QFileInfo>
 
-using namespace Android;
-using namespace Android::Internal;
-
-//
-// JavaEditor
-//
-
-JavaEditor::JavaEditor(JavaEditorWidget *editor)
-  : BaseTextEditor(editor)
-{
-    setContext(Core::Context(Constants::C_JAVA_EDITOR,
-              TextEditor::Constants::C_TEXTEDITOR));
-    setDuplicateSupported(true);
-    setCommentStyle(Utils::CommentDefinition::CppStyle);
-    setCompletionAssistProvider(ExtensionSystem::PluginManager::getObject<JavaCompletionAssistProvider>());
-    setAutoCompleter(new JavaAutoCompleter);
-}
-
-Core::IEditor *JavaEditor::duplicate()
-{
-    JavaEditorWidget *ret = new JavaEditorWidget(
-                qobject_cast<JavaEditorWidget*>(editorWidget()));
-    TextEditor::TextEditorSettings::initializeEditor(ret);
-    return ret->editor();
-}
+namespace Android {
+namespace Internal {
 
 //
 // JavaEditorWidget
 //
 
-JavaEditorWidget::JavaEditorWidget(QWidget *parent)
-    : BaseTextEditorWidget(new JavaDocument(), parent)
+class JavaEditorWidget : public TextEditor::BaseTextEditorWidget
 {
-}
+public:
+    JavaEditorWidget()
+    {
+        setCompletionAssistProvider(ExtensionSystem::PluginManager::getObject<JavaCompletionAssistProvider>());
+    }
+};
 
-JavaEditorWidget::JavaEditorWidget(JavaEditorWidget *other)
-    : BaseTextEditorWidget(other)
-{
-}
-
-TextEditor::BaseTextEditor *JavaEditorWidget::createEditor()
-{
-    return new JavaEditor(this);
-}
 
 //
 // JavaDocument
 //
 
+class JavaDocument : public TextEditor::BaseTextDocument
+{
+public:
+    JavaDocument();
+    QString defaultPath() const;
+    QString suggestedFileName() const;
+};
+
+
 JavaDocument::JavaDocument()
-        : TextEditor::BaseTextDocument()
 {
     setId(Constants::JAVA_EDITOR_ID);
     setMimeType(QLatin1String(Constants::JAVA_MIMETYPE));
-    setSyntaxHighlighter(TextEditor::createGenericSyntaxHighlighter(Core::MimeDatabase::findByType(QLatin1String(Constants::JAVA_MIMETYPE))));
     setIndenter(new JavaIndenter);
 }
 
@@ -111,3 +93,26 @@ QString JavaDocument::suggestedFileName() const
     QFileInfo fi(filePath());
     return fi.fileName();
 }
+
+
+//
+// JavaEditorFactory
+//
+
+JavaEditorFactory::JavaEditorFactory()
+{
+    setId(Constants::JAVA_EDITOR_ID);
+    setDisplayName(tr("Java Editor"));
+    addMimeType(Constants::JAVA_MIMETYPE);
+
+    setDocumentCreator([]() { return new JavaDocument; });
+    setEditorWidgetCreator([]() { return new JavaEditorWidget; });
+    setAutoCompleterCreator([]() { return new JavaAutoCompleter; });
+    setGenericSyntaxHighlighter(QLatin1String(Constants::JAVA_MIMETYPE));
+    setCommentStyle(Utils::CommentDefinition::CppStyle);
+
+    setEditorActionHandlers(TextEditor::TextEditorActionHandler::UnCommentSelection);
+}
+
+} // namespace Internal
+} // namespace Android

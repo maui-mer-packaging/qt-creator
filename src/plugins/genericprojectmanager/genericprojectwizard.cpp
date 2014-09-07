@@ -169,7 +169,7 @@ Core::GeneratedFiles GenericProjectWizard::generateFiles(const QWizard *w,
         if (! thisDir.entryList(nameFilters, QDir::Files).isEmpty()) {
             QString relative = dir.relativeFilePath(path);
             if (relative.isEmpty())
-                relative = QLatin1String(".");
+                relative = QLatin1Char('.');
             includePaths.append(relative);
         }
     }
@@ -183,10 +183,10 @@ Core::GeneratedFiles GenericProjectWizard::generateFiles(const QWizard *w,
         sources[i] = dir.relativeFilePath(sources[i]);
 
     Core::GeneratedFile generatedFilesFile(filesFileName);
-    generatedFilesFile.setContents(sources.join(QLatin1String("\n")));
+    generatedFilesFile.setContents(sources.join(QLatin1Char('\n')));
 
     Core::GeneratedFile generatedIncludesFile(includesFileName);
-    generatedIncludesFile.setContents(includePaths.join(QLatin1String("\n")));
+    generatedIncludesFile.setContents(includePaths.join(QLatin1Char('\n')));
 
     Core::GeneratedFile generatedConfigFile(configFileName);
     generatedConfigFile.setContents(QLatin1String(ConfigFileTemplate));

@@ -71,18 +71,8 @@ using namespace TextEditor;
 
 namespace DiffEditor {
 
-class UnifiedDiffEditor : public BaseTextEditor
-{
-    Q_OBJECT
-public:
-    UnifiedDiffEditor(BaseTextEditorWidget *editorWidget)
-        : BaseTextEditor(editorWidget) {
-        document()->setId("DiffEditor.UnifiedDiffEditor");
-    }
-};
-
 UnifiedDiffEditorWidget::UnifiedDiffEditorWidget(QWidget *parent)
-    : SelectableTextEditorWidget(parent)
+    : SelectableTextEditorWidget("DiffEditor.UnifiedDiffEditor", parent)
     , m_guiController(0)
     , m_controller(0)
     , m_ignoreCurrentIndexChange(false)
@@ -101,9 +91,8 @@ UnifiedDiffEditorWidget::UnifiedDiffEditorWidget(QWidget *parent)
     SelectableTextEditorWidget::setDisplaySettings(settings);
 
     setReadOnly(true);
-    connect(TextEditorSettings::instance(),
-            SIGNAL(displaySettingsChanged(TextEditor::DisplaySettings)),
-            this, SLOT(setDisplaySettings(TextEditor::DisplaySettings)));
+    connect(TextEditorSettings::instance(), &TextEditorSettings::displaySettingsChanged,
+            this, &UnifiedDiffEditorWidget::setDisplaySettings);
     setDisplaySettings(TextEditorSettings::displaySettings());
     setCodeStyle(TextEditorSettings::codeStyle());
 
@@ -385,11 +374,6 @@ void UnifiedDiffEditorWidget::patch(int diffFileIndex, int chunkIndex, bool reve
                 Core::EditorManager::defaultTextCodec()->fromUnicode(patch),
                 workingDirectory, strip, revert))
         m_controller->requestReload();
-}
-
-TextEditor::BaseTextEditor *UnifiedDiffEditorWidget::createEditor()
-{
-    return new UnifiedDiffEditor(this);
 }
 
 void UnifiedDiffEditorWidget::clear(const QString &message)
@@ -844,5 +828,3 @@ void UnifiedDiffEditorWidget::setCurrentDiffFileIndex(int diffFileIndex)
 }
 
 } // namespace DiffEditor
-
-#include "unifieddiffeditorwidget.moc"

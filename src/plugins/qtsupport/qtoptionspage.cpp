@@ -88,8 +88,6 @@ void QtOptionsPage::apply()
 {
     if (!m_widget) // page was never shown
         return;
-    m_widget->finish();
-
     m_widget->apply();
 }
 
@@ -139,8 +137,8 @@ QtOptionsPageWidget::QtOptionsPageWidget(QWidget *parent)
 
     // setup parent items for auto-detected and manual versions
     m_ui->qtdirList->header()->setStretchLastSection(false);
-    m_ui->qtdirList->header()->setResizeMode(0, QHeaderView::ResizeToContents);
-    m_ui->qtdirList->header()->setResizeMode(1, QHeaderView::Stretch);
+    m_ui->qtdirList->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    m_ui->qtdirList->header()->setSectionResizeMode(1, QHeaderView::Stretch);
     m_ui->qtdirList->setTextElideMode(Qt::ElideNone);
     m_autoItem = new QTreeWidgetItem(m_ui->qtdirList);
     m_autoItem->setText(0, tr("Auto-detected"));
@@ -376,7 +374,7 @@ QtOptionsPageWidget::ValidityInfo QtOptionsPageWidget::validInformation(const Ba
     if (useable) {
         warnings += version->warningReason();
         if (!warnings.isEmpty()) {
-            info.message = warnings.join(QLatin1String("\n"));
+            info.message = warnings.join(QLatin1Char('\n'));
             info.icon = m_warningVersionIcon;
         }
     }
@@ -662,7 +660,7 @@ void QtOptionsPageWidget::editPath()
     QString dir = currentVersion()->qmakeCommand().toFileInfo().absolutePath();
     FileName qtVersion = FileName::fromString(
                 QFileDialog::getOpenFileName(this,
-                                             tr("Select a qmake executable"),
+                                             tr("Select a qmake Executable"),
                                              dir,
                                              filterForQmakeFileDialog(),
                                              0,
@@ -683,8 +681,8 @@ void QtOptionsPageWidget::editPath()
     }
     // same type, replace
     version->setId(current->uniqueId());
-    if (current->displayName() != current->defaultDisplayName(current->qtVersionString(), current->qmakeCommand()))
-        version->setDisplayName(current->displayName());
+    if (current->unexpandedDisplayName() != current->defaultUnexpandedDisplayName(current->qmakeCommand()))
+        version->setUnexpandedDisplayName(current->displayName());
     m_versions.replace(m_versions.indexOf(current), version);
     delete current;
 
@@ -872,9 +870,8 @@ QTreeWidgetItem *QtOptionsPageWidget::treeItemForIndex(int index) const
 
 void QtOptionsPageWidget::versionChanged(QTreeWidgetItem *newItem, QTreeWidgetItem *old)
 {
-    Q_UNUSED(newItem)
-    if (old)
-        fixQtVersionName(indexForTreeItem(old));
+    Q_UNUSED(newItem);
+    Q_UNUSED(old);
     userChangedCurrentVersion();
 }
 
@@ -884,7 +881,7 @@ void QtOptionsPageWidget::updateWidgets()
     m_configurationWidget = 0;
     BaseQtVersion *version = currentVersion();
     if (version) {
-        m_versionUi->nameEdit->setText(version->displayName());
+        m_versionUi->nameEdit->setText(version->unexpandedDisplayName());
         m_versionUi->qmakePath->setText(version->qmakeCommand().toUserOutput());
         m_configurationWidget = version->createConfigurationWidget();
         if (m_configurationWidget) {
@@ -912,16 +909,9 @@ void QtOptionsPageWidget::updateCurrentQtName()
     int currentItemIndex = indexForTreeItem(currentItem);
     if (currentItemIndex < 0)
         return;
-    m_versions[currentItemIndex]->setDisplayName(m_versionUi->nameEdit->text());
+    m_versions[currentItemIndex]->setUnexpandedDisplayName(m_versionUi->nameEdit->text());
     currentItem->setText(0, m_versions[currentItemIndex]->displayName());
     updateDescriptionLabel();
-}
-
-
-void QtOptionsPageWidget::finish()
-{
-    if (QTreeWidgetItem *item = m_ui->qtdirList->currentItem())
-        fixQtVersionName(indexForTreeItem(item));
 }
 
 void QtOptionsPageWidget::apply()
@@ -933,43 +923,6 @@ void QtOptionsPageWidget::apply()
 
     connect(QtVersionManager::instance(), SIGNAL(qtVersionsChanged(QList<int>,QList<int>,QList<int>)),
             this, SLOT(updateQtVersions(QList<int>,QList<int>,QList<int>)));
-}
-
-/* Checks that the Qt version name is unique
- * and otherwise changes the name
- *
- */
-void QtOptionsPageWidget::fixQtVersionName(int index)
-{
-    if (index < 0)
-        return;
-    int count = m_versions.count();
-    QString name = m_versions.at(index)->displayName();
-    if (name.isEmpty())
-        return;
-    for (int i = 0; i < count; ++i) {
-        if (i != index) {
-            if (m_versions.at(i)->displayName() == m_versions.at(index)->displayName()) {
-                // Same name, find new name
-                QRegExp regexp(QLatin1String("^(.*)\\((\\d)\\)$"));
-                if (regexp.exactMatch(name)) {
-                    // Already in Name (#) format
-                    name = regexp.cap(1);
-                    name += QLatin1Char('(');
-                    name += QString::number(regexp.cap(2).toInt() + 1);
-                    name += QLatin1Char(')');
-                } else {
-                    name +=  QLatin1String(" (2)");
-                }
-                // set new name
-                m_versions[index]->setDisplayName(name);
-                treeItemForIndex(index)->setText(0, name);
-
-                // Now check again...
-                fixQtVersionName(index);
-            }
-        }
-    }
 }
 
 QList<BaseQtVersion *> QtOptionsPageWidget::versions() const

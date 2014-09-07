@@ -31,12 +31,15 @@
 #include "cppeditortestcase.h"
 
 #include "cppeditor.h"
+#include "cppeditordocument.h"
 
 #include <coreplugin/editormanager/editormanager.h>
 #include <cpptools/cppsemanticinfo.h>
 #include <cplusplus/CppDocument.h>
 
 #include <QDir>
+
+using namespace CppEditor::Internal;
 
 namespace CppEditor {
 namespace Internal {
@@ -61,12 +64,9 @@ TestCase::~TestCase()
 {
 }
 
-bool TestCase::openCppEditor(const QString &fileName,
-                             Internal::CPPEditor **editor,
-                             Internal::CppEditorWidget **editorWidget)
+bool TestCase::openCppEditor(const QString &fileName, CppEditor **editor, CppEditorWidget **editorWidget)
 {
-    using namespace CppEditor::Internal;
-    if (CPPEditor *e = dynamic_cast<CPPEditor *>(Core::EditorManager::openEditor(fileName))) {
+    if (CppEditor *e = dynamic_cast<CppEditor *>(Core::EditorManager::openEditor(fileName))) {
         if (editor)
             *editor = e;
         if (editorWidget) {
@@ -85,10 +85,9 @@ bool TestCase::openCppEditor(const QString &fileName,
 }
 
 CPlusPlus::Document::Ptr TestCase::waitForRehighlightedSemanticDocument(
-        Internal::CppEditorWidget *editorWidget)
+        CppEditorWidget *editorWidget)
 {
-    editorWidget->semanticRehighlight(true);
-    while (editorWidget->semanticInfo().doc.isNull())
+    while (!editorWidget->isSemanticInfoValid())
         QCoreApplication::processEvents();
     return editorWidget->semanticInfo().doc;
 }

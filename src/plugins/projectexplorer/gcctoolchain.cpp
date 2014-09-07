@@ -100,7 +100,7 @@ static QByteArray runGcc(const FileName &gcc, const QStringList &arguments, cons
     if (cpp.exitCode() != 0) {
         qWarning().nospace()
             << Q_FUNC_INFO << ": " << gcc.toUserOutput() << ' '
-            << arguments.join(QLatin1String(" ")) << " returned exit code "
+            << arguments.join(QLatin1Char(' ')) << " returned exit code "
             << cpp.exitCode() << ": " << stdErr;
         return QByteArray();
     }
@@ -442,7 +442,7 @@ ToolChain::CompilerFlags GccToolChain::compilerFlags(const QStringList &cxxflags
     const QStringList allCxxflags = m_platformCodeGenFlags + cxxflags; // add only cxxflags is empty?
     foreach (const QString &flag, allCxxflags) {
         if (flag.startsWith(QLatin1String("-std="))) {
-            const QByteArray std = flag.mid(5).toAscii();
+            const QByteArray std = flag.mid(5).toLatin1();
             if (std == "c++98" || std == "c++03") {
                 flags &= ~CompilerFlags(StandardCxx11 | GnuExtensions);
             } else if (std == "gnu++98" || std == "gnu++03") {

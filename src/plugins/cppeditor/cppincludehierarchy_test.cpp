@@ -42,8 +42,10 @@
 Q_DECLARE_METATYPE(QList<QByteArray>)
 
 using namespace CPlusPlus;
-using namespace CppEditor::Internal;
 using namespace CppTools;
+
+namespace CppEditor {
+namespace Internal {
 
 namespace {
 
@@ -69,7 +71,7 @@ QString toString(CppIncludeHierarchyModel &model)
             + toString(model, model.index(1, 0));
 }
 
-class IncludeHierarchyTestCase: public CppEditor::Internal::Tests::TestCase
+class IncludeHierarchyTestCase : public Tests::TestCase
 {
 public:
     IncludeHierarchyTestCase(const QList<QByteArray> &sourceList,
@@ -77,7 +79,7 @@ public:
     {
         QVERIFY(succeededSoFar());
 
-        QStringList filePaths;
+        QSet<QString> filePaths;
         const int sourceListSize = sourceList.size();
         for (int i = 0; i < sourceListSize; ++i) {
             const QByteArray &source = sourceList.at(i);
@@ -95,7 +97,7 @@ public:
 
         // Open Editor
         const QString fileName = QDir::tempPath() + QLatin1String("/file1.h");
-        CPPEditor *editor;
+        CppEditor *editor;
         QVERIFY(openCppEditor(fileName, &editor));
         closeEditorAtEndOfTestCase(editor);
 
@@ -182,3 +184,6 @@ void CppEditorPlugin::test_includehierarchy()
 
     IncludeHierarchyTestCase(documents, expectedHierarchy);
 }
+
+} // namespace CppEditor
+} // namespace Internal

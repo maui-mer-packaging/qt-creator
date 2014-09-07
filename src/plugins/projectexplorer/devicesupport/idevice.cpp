@@ -31,12 +31,15 @@
 #include "devicemanager.h"
 #include "deviceprocesslist.h"
 
+#include "../kit.h"
+#include "../kitinformation.h"
+
 #include <ssh/sshconnection.h>
 #include <utils/portlist.h>
 #include <utils/qtcassert.h>
 
 #include <QCoreApplication>
-#include <QDesktopServices>
+#include <QStandardPaths>
 
 #include <QString>
 #include <QUuid>
@@ -239,6 +242,16 @@ Core::Id IDevice::id() const
     return d->id;
 }
 
+/*!
+    Tests whether a device can be compatible with the given kit. The default
+    implementation will match the device type specified in the kit against
+    the device's own type.
+*/
+bool IDevice::isCompatibleWith(const Kit *k) const
+{
+    return DeviceTypeKitInformation::deviceTypeId(k) == type();
+}
+
 PortsGatheringMethod::Ptr IDevice::portsGatheringMethod() const
 {
     return PortsGatheringMethod::Ptr();
@@ -417,7 +430,7 @@ int IDevice::version() const
 
 QString IDevice::defaultPrivateKeyFilePath()
 {
-    return QDesktopServices::storageLocation(QDesktopServices::HomeLocation)
+    return QStandardPaths::writableLocation(QStandardPaths::HomeLocation)
         + QLatin1String("/.ssh/id_rsa");
 }
 

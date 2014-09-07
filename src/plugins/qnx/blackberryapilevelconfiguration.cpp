@@ -220,7 +220,8 @@ QnxAbstractQtVersion *BlackBerryApiLevelConfiguration::createQtVersion(
 {
     QnxAbstractQtVersion *version = new BlackBerryQtVersion(
             arch, qmakePath, true, QString(), envFile().toString());
-    version->setDisplayName(tr("Qt %1 for %2").arg(version->qtVersionString(), versionName));
+    version->setUnexpandedDisplayName(tr("Qt %{Qt:version} for %2")
+                                      .arg(version->qtVersionString(), versionName));
     QtVersionManager::addVersion(version);
     return version;
 }
@@ -291,7 +292,7 @@ bool BlackBerryApiLevelConfiguration::activate()
             return false;
 
         QString errorMessage = tr("The following errors occurred while activating target: %1\n").arg(m_targetName);
-        errorMessage.append(validationErrors().join(QLatin1String("\n")));
+        errorMessage.append(validationErrors().join(QLatin1Char('\n')));
         QMessageBox::warning(Core::ICore::mainWindow(), tr("Cannot Set up BB10 Configuration"),
                              errorMessage, QMessageBox::Ok);
         return false;

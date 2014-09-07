@@ -32,12 +32,14 @@
 
 #include "texteditor_global.h"
 
+#include <coreplugin/id.h>
 #include <coreplugin/textdocument.h>
 #include <coreplugin/editormanager/editormanager.h>
 #include <coreplugin/editormanager/ieditor.h>
 
 #include <QList>
 #include <QMap>
+#include <QSharedPointer>
 
 QT_BEGIN_NAMESPACE
 class QTextCursor;
@@ -63,7 +65,7 @@ class TEXTEDITOR_EXPORT BaseTextDocument : public Core::TextDocument
     Q_OBJECT
 
 public:
-    BaseTextDocument();
+    explicit BaseTextDocument(Core::Id id = Core::Id());
     virtual ~BaseTextDocument();
 
     static QMap<QString, QString> openedTextDocumentContents();
@@ -146,6 +148,8 @@ private:
 
     BaseTextDocumentPrivate *d;
 };
+
+typedef QSharedPointer<BaseTextDocument> BaseTextDocumentPtr;
 
 } // namespace TextEditor
 

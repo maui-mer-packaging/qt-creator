@@ -29,16 +29,14 @@
 
 #include "iosprobe.h"
 
-#include <utils/logging.h>
-
-#include <QFileInfo>
-#include <QProcess>
 #include <QDir>
+#include <QFileInfo>
 #include <QFileInfoList>
+#include <QLoggingCategory>
+#include <QProcess>
 
-namespace {
-Q_LOGGING_CATEGORY(probeLog, "qtc.ios.probe")
-}
+static Q_LOGGING_CATEGORY(probeLog, "qtc.ios.probe")
+
 namespace Ios {
 
 static QString qsystem(const QString &exe, const QStringList &args = QStringList())
@@ -248,7 +246,7 @@ void IosProbe::setupDefaultToolchains(const QString &devPath, const QString &xco
                         continue;
                     }
                     if (sdkName.isEmpty()) {
-                        if (compareVersions(maxVersion, versionStr) > 0) {
+                        if (maxVersion.isEmpty() || compareVersions(maxVersion, versionStr) > 0) {
                             maxVersion = versionStr;
                             sdkPath = sdkDirInfo.canonicalFilePath();
                             sdkSettings = sdkInfo;

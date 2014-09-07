@@ -1,9 +1,38 @@
+/****************************************************************************
+**
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
+** Contact: http://www.qt-project.org/legal
+**
+** This file is part of Qt Creator.
+**
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and Digia.  For licensing terms and
+** conditions see http://qt.digia.com/licensing.  For further information
+** use the contact form at http://qt.digia.com/contact-us.
+**
+** GNU Lesser General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 2.1 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL included in the
+** packaging of this file.  Please review the following information to
+** ensure the GNU Lesser General Public License version 2.1 requirements
+** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+**
+** In addition, as a special exception, Digia gives you certain additional
+** rights.  These rights are described in the Digia Qt LGPL Exception
+** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+**
+****************************************************************************/
+
 #include "builtinindexingsupport.h"
 
+#include "builtineditordocumentparser.h"
 #include "cppchecksymbols.h"
 #include "cppmodelmanager.h"
 #include "cppprojectfile.h"
-#include "cppsnapshotupdater.h"
 #include "cppsourceprocessor.h"
 #include "cpptoolsconstants.h"
 #include "cpptoolsplugin.h"
@@ -38,8 +67,8 @@ public:
     int dumpFileNameWhileParsing;
     int revision;
     ProjectPart::HeaderPaths headerPaths;
-    CppModelManagerInterface::WorkingCopy workingCopy;
-    QStringList sourceFiles;
+    WorkingCopy workingCopy;
+    QSet<QString> sourceFiles;
 };
 
 class WriteTaskFileForDiagnostics
@@ -104,7 +133,7 @@ private:
     int m_processedDiagnostics;
 };
 
-void classifyFiles(const QStringList &files, QStringList *headers, QStringList *sources)
+void classifyFiles(const QSet<QString> &files, QStringList *headers, QStringList *sources)
 {
     foreach (const QString &file, files) {
         if (ProjectFile::isSource(ProjectFile::classify(file)))
@@ -116,11 +145,11 @@ void classifyFiles(const QStringList &files, QStringList *headers, QStringList *
 
 void indexFindErrors(QFutureInterface<void> &future, const ParseParams params)
 {
-    QStringList files = params.sourceFiles;
-    files.sort();
     QStringList sources, headers;
-    classifyFiles(files, &headers, &sources);
-    files = sources + headers;
+    classifyFiles(params.sourceFiles, &headers, &sources);
+    sources.sort();
+    headers.sort();
+    QStringList files = sources + headers;
 
     WriteTaskFileForDiagnostics taskFileWriter;
     QElapsedTimer timer;
@@ -136,17 +165,17 @@ void indexFindErrors(QFutureInterface<void> &future, const ParseParams params)
         qDebug("FindErrorsIndexing: \"%s\"", qPrintable(file));
 
         // Parse the file as precisely as possible
-        SnapshotUpdater updater(file);
-        updater.setReleaseSourceAndAST(false);
-        updater.update(params.workingCopy);
-        CPlusPlus::Document::Ptr document = updater.document();
+        BuiltinEditorDocumentParser parser(file);
+        parser.setReleaseSourceAndAST(false);
+        parser.update(params.workingCopy);
+        CPlusPlus::Document::Ptr document = parser.document();
         QTC_ASSERT(document, return);
 
         // Write diagnostic messages
         taskFileWriter.process(document);
 
         // Look up symbols
-        CPlusPlus::LookupContext context(document, updater.snapshot());
+        CPlusPlus::LookupContext context(document, parser.snapshot());
         CheckSymbols::go(document, context, QList<CheckSymbols::Result>()).waitForFinished();
 
         document->releaseSourceAndAST();
@@ -167,20 +196,18 @@ void index(QFutureInterface<void> &future, const ParseParams params)
     sourceProcessor->setHeaderPaths(params.headerPaths);
     sourceProcessor->setWorkingCopy(params.workingCopy);
 
-    QStringList files = params.sourceFiles;
 
     QStringList sources;
     QStringList headers;
-    classifyFiles(files, &headers, &sources);
+    classifyFiles(params.sourceFiles, &headers, &sources);
 
-    foreach (const QString &file, files)
+    foreach (const QString &file, params.sourceFiles)
         sourceProcessor->removeFromCache(file);
 
     const int sourceCount = sources.size();
-    files = sources;
-    files += headers;
+    QStringList files = sources + headers;
 
-    sourceProcessor->setTodo(files);
+    sourceProcessor->setTodo(files.toSet());
 
     const QString conf = CppModelManagerInterface::configurationFileName();
     bool processingHeaders = false;
@@ -221,7 +248,7 @@ void index(QFutureInterface<void> &future, const ParseParams params)
 
 void parse(QFutureInterface<void> &future, const ParseParams params)
 {
-    const QStringList files = params.sourceFiles;
+    const QSet<QString> &files = params.sourceFiles;
     if (files.isEmpty())
         return;
 
@@ -327,7 +354,7 @@ BuiltinIndexingSupport::BuiltinIndexingSupport()
 BuiltinIndexingSupport::~BuiltinIndexingSupport()
 {}
 
-QFuture<void> BuiltinIndexingSupport::refreshSourceFiles(const QStringList &sourceFiles,
+QFuture<void> BuiltinIndexingSupport::refreshSourceFiles(const QSet<QString> &sourceFiles,
     CppModelManagerInterface::ProgressNotificationMode mode)
 {
     CppModelManager *mgr = CppModelManager::instance();

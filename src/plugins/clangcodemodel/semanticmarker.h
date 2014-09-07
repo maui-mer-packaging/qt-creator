@@ -36,8 +36,6 @@
 #include "sourcemarker.h"
 #include "utils.h"
 
-#include <texteditor/basetexteditor.h>
-
 #include <QMutex>
 #include <QScopedPointer>
 #include <QSharedPointer>
@@ -52,6 +50,16 @@ class CLANG_EXPORT SemanticMarker
 
 public:
     typedef QSharedPointer<SemanticMarker> Ptr;
+
+    class Range
+    {
+        Range();
+    public:
+        Range(int first, int last) : first(first), last(last) {}
+
+        int first;
+        int last;
+    };
 
 public:
     SemanticMarker();
@@ -69,7 +77,7 @@ public:
 
     QList<Diagnostic> diagnostics() const;
 
-    QList<TextEditor::BlockRange> ifdefedOutBlocks() const;
+    QList<Range> ifdefedOutBlocks() const;
 
     QList<SourceMarker> sourceMarkersInRange(unsigned firstLine,
                                              unsigned lastLine);

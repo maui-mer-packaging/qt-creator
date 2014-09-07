@@ -44,6 +44,7 @@ const char NEWSESSION[]           = "ProjectExplorer.NewSession";
 const char NEWPROJECT[]           = "ProjectExplorer.NewProject";
 const char LOAD[]                 = "ProjectExplorer.Load";
 const char UNLOAD[]               = "ProjectExplorer.Unload";
+const char UNLOADCM[]             = "ProjectExplorer.UnloadCM";
 const char CLEARSESSION[]         = "ProjectExplorer.ClearSession";
 const char BUILDPROJECTONLY[]     = "ProjectExplorer.BuildProjectOnly";
 const char BUILD[]                = "ProjectExplorer.Build";
@@ -101,6 +102,7 @@ const char LANG_QMLJS[]           = "QMLJS";
 
 // Menus
 const char M_RECENTPROJECTS[]     = "ProjectExplorer.Menu.Recent";
+const char M_UNLOADPROJECTS[]     = "ProjectExplorer.Menu.Unload";
 const char M_BUILDPROJECT[]       = "ProjectExplorer.Menu.Build";
 const char M_DEBUG[]              = "ProjectExplorer.Menu.Debug";
 const char M_DEBUG_STARTDEBUGGING[] = "ProjectExplorer.Menu.Debug.StartDebugging";
@@ -192,14 +194,14 @@ const char TASK_CATEGORY_BUILDSYSTEM[] = "Task.Category.Buildsystem";
 const char TASK_CATEGORY_DEPLOYMENT[] = "Task.Category.Deploy";
 
 // Wizard categories
-const char QT_PROJECT_WIZARD_CATEGORY[] = "H.QtProjects";
+const char QT_PROJECT_WIZARD_CATEGORY[] = "H.Project";
 const char QT_PROJECT_WIZARD_CATEGORY_DISPLAY[] = QT_TRANSLATE_NOOP("ProjectExplorer", "Other Project");
 
-const char QT_APPLICATION_WIZARD_CATEGORY[] = "F.QtApplications";
-const char QT_APPLICATION_WIZARD_CATEGORY_DISPLAY[] = QT_TRANSLATE_NOOP("ProjectExplorer", "Applications");
+const char QT_APPLICATION_WIZARD_CATEGORY[] = "F.Application";
+const char QT_APPLICATION_WIZARD_CATEGORY_DISPLAY[] = QT_TRANSLATE_NOOP("ProjectExplorer", "Application");
 
-const char LIBRARIES_WIZARD_CATEGORY[] = "G.Libraries";
-const char LIBRARIES_WIZARD_CATEGORY_DISPLAY[] = QT_TRANSLATE_NOOP("ProjectExplorer", "Libraries");
+const char LIBRARIES_WIZARD_CATEGORY[] = "G.Library";
+const char LIBRARIES_WIZARD_CATEGORY_DISPLAY[] = QT_TRANSLATE_NOOP("ProjectExplorer", "Library");
 
 const char IMPORT_WIZARD_CATEGORY[] = "T.Import";
 const char IMPORT_WIZARD_CATEGORY_DISPLAY[] = QT_TRANSLATE_NOOP("ProjectExplorer", "Import Project");

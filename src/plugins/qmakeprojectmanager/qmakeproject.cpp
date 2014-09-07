@@ -231,6 +231,14 @@ ProjectFilesVisitor::ProjectFilesVisitor(QmakeProjectFiles *files) :
 {
 }
 
+namespace {
+// uses std::unique, so takes a sorted list
+void unique(QStringList &list)
+{
+    list.erase(std::unique(list.begin(), list.end()), list.end());
+}
+}
+
 void ProjectFilesVisitor::findProjectFiles(QmakeProFileNode *rootNode, QmakeProjectFiles *files)
 {
     files->clear();
@@ -238,16 +246,18 @@ void ProjectFilesVisitor::findProjectFiles(QmakeProFileNode *rootNode, QmakeProj
     rootNode->accept(&visitor);
     for (int i = 0; i < FileTypeSize; ++i) {
         Utils::sort(files->files[i]);
+        unique(files->files[i]);
         Utils::sort(files->generatedFiles[i]);
+        unique(files->generatedFiles[i]);
     }
     Utils::sort(files->proFiles);
+    unique(files->proFiles);
 }
 
 void ProjectFilesVisitor::visitProjectNode(ProjectNode *projectNode)
 {
     const QString path = projectNode->path();
-    if (!m_files->proFiles.contains(path))
-        m_files->proFiles.append(path);
+    m_files->proFiles.append(path);
     visitFolderNode(projectNode);
 }
 
@@ -260,8 +270,7 @@ void ProjectFilesVisitor::visitFolderNode(FolderNode *folderNode)
         const QString path = fileNode->path();
         const int type = fileNode->fileType();
         QStringList &targetList = fileNode->isGenerated() ? m_files->generatedFiles[type] : m_files->files[type];
-        if (!targetList.contains(path))
-            targetList.push_back(path);
+        targetList.push_back(path);
     }
 }
 
@@ -495,7 +504,7 @@ void QmakeProject::updateCppCodeModel()
     FindQmakeProFiles findQmakeProFiles;
     QList<QmakeProFileNode *> proFiles = findQmakeProFiles(rootProjectNode());
 
-    CppTools::CppModelManagerInterface::ProjectInfo pinfo = modelmanager->projectInfo(this);
+    CppTools::ProjectInfo pinfo = modelmanager->projectInfo(this);
     pinfo.clearProjectParts();
     ProjectPart::QtVersion qtVersionForPart = ProjectPart::NoQt;
     if (qtVersion) {
@@ -508,85 +517,109 @@ void QmakeProject::updateCppCodeModel()
     QHash<QString, QString> uiCodeModelData;
     QStringList allFiles;
     foreach (QmakeProFileNode *pro, proFiles) {
-        ProjectPart::Ptr part(new ProjectPart);
-        part->project = this;
-        part->displayName = pro->displayName();
-        part->projectFile = pro->path();
+        ProjectPart::Ptr templatePart(new ProjectPart);
+        templatePart->project = this;
+        templatePart->displayName = pro->displayName();
+        templatePart->projectFile = pro->path();
 
         if (pro->variableValue(ConfigVar).contains(QLatin1String("qt")))
-            part->qtVersion = qtVersionForPart;
+            templatePart->qtVersion = qtVersionForPart;
         else
-            part->qtVersion = ProjectPart::NoQt;
+            templatePart->qtVersion = ProjectPart::NoQt;
 
         // part->defines
-        part->projectDefines += pro->cxxDefines();
+        templatePart->projectDefines += pro->cxxDefines();
 
         // part->headerPaths
         foreach (const QString &inc, pro->variableValue(IncludePathVar))
-            part->headerPaths += ProjectPart::HeaderPath(inc, ProjectPart::HeaderPath::IncludePath);
+            templatePart->headerPaths += ProjectPart::HeaderPath(inc, ProjectPart::HeaderPath::IncludePath);
 
         if (qtVersion) {
             foreach (const HeaderPath &header, qtVersion->systemHeaderPathes(k)) {
                 ProjectPart::HeaderPath::Type type = ProjectPart::HeaderPath::IncludePath;
                 if (header.kind() == HeaderPath::FrameworkHeaderPath)
                     type = ProjectPart::HeaderPath::FrameworkPath;
-                part->headerPaths += ProjectPart::HeaderPath(header.path(), type);
+                templatePart->headerPaths += ProjectPart::HeaderPath(header.path(), type);
             }
             if (!qtVersion->frameworkInstallPath().isEmpty()) {
-                part->headerPaths += ProjectPart::HeaderPath(
+                templatePart->headerPaths += ProjectPart::HeaderPath(
                             qtVersion->frameworkInstallPath(),
                             ProjectPart::HeaderPath::FrameworkPath);
             }
         }
 
         if (QmakeProFileNode *node = rootQmakeProjectNode())
-            part->headerPaths += ProjectPart::HeaderPath(node->resolvedMkspecPath(),
+            templatePart->headerPaths += ProjectPart::HeaderPath(node->resolvedMkspecPath(),
                                                          ProjectPart::HeaderPath::IncludePath);
 
         // part->precompiledHeaders
-        part->precompiledHeaders.append(pro->variableValue(PrecompiledHeaderVar));
+        templatePart->precompiledHeaders.append(pro->variableValue(PrecompiledHeaderVar));
 
-        // part->files
-        foreach (const QString &file, pro->variableValue(CppSourceVar)) {
-            allFiles << file;
-            part->files << ProjectFile(file, ProjectFile::CXXSource);
-        }
-        foreach (const QString &file, pro->variableValue(CppHeaderVar)) {
-            allFiles << file;
-            part->files << ProjectFile(file, ProjectFile::CXXHeader);
+        ProjectPart::Ptr cppPart = templatePart->copy();
+        { // C++ files:
+            // part->files
+            foreach (const QString &file, pro->variableValue(CppSourceVar)) {
+                allFiles << file;
+                cppPart->files << ProjectFile(file, ProjectFile::CXXSource);
+            }
+            foreach (const QString &file, pro->variableValue(CppHeaderVar)) {
+                allFiles << file;
+                cppPart->files << ProjectFile(file, ProjectFile::CXXHeader);
+            }
+
+            // Ui Files:
+            QHash<QString, QString> uiData = pro->uiFiles();
+            for (QHash<QString, QString>::const_iterator i = uiData.constBegin(); i != uiData.constEnd(); ++i) {
+                allFiles << i.value();
+                cppPart->files << ProjectFile(i.value(), ProjectFile::CXXHeader);
+            }
+            uiCodeModelData.unite(uiData);
+
+            cppPart->files.prepend(ProjectFile(CppTools::CppModelManagerInterface::configurationFileName(),
+                                            ProjectFile::CXXSource));
+            const QStringList cxxflags = pro->variableValue(CppFlagsVar);
+            cppPart->evaluateToolchain(ToolChainKitInformation::toolChain(k),
+                                       cxxflags,
+                                       cxxflags,
+                                       SysRootKitInformation::sysRoot(k));
+
+            if (!cppPart->files.isEmpty()) {
+                pinfo.appendProjectPart(cppPart);
+                setProjectLanguage(ProjectExplorer::Constants::LANG_CXX, true);
+            }
         }
 
-        // Ui Files:
-        QHash<QString, QString> uiData = pro->uiFiles();
-        for (QHash<QString, QString>::const_iterator i = uiData.constBegin(); i != uiData.constEnd(); ++i) {
-            allFiles << i.value();
-            part->files << ProjectFile(i.value(), ProjectFile::CXXHeader);
-        }
-        uiCodeModelData.unite(uiData);
+        ProjectPart::Ptr objcppPart = templatePart->copy();
+        { // ObjC++ files:
+            foreach (const QString &file, pro->variableValue(ObjCSourceVar)) {
+                allFiles << file;
+                // Although the enum constant is called ObjCSourceVar, it actually is ObjC++ source
+                // code, as qmake does not handle C (and ObjC).
+                objcppPart->files << ProjectFile(file, ProjectFile::ObjCXXSource);
+            }
+            foreach (const QString &file, pro->variableValue(ObjCHeaderVar)) {
+                allFiles << file;
+                objcppPart->files << ProjectFile(file, ProjectFile::ObjCXXHeader);
+            }
 
-        part->files.prepend(ProjectFile(CppTools::CppModelManagerInterface::configurationFileName(),
-                                        ProjectFile::CXXSource));
-        foreach (const QString &file, pro->variableValue(ObjCSourceVar)) {
-            allFiles << file;
-            // Although the enum constant is called ObjCSourceVar, it actually is ObjC++ source
-            // code, as qmake does not handle C (and ObjC).
-            part->files << ProjectFile(file, ProjectFile::ObjCXXSource);
-        }
-        foreach (const QString &file, pro->variableValue(ObjCHeaderVar)) {
-            allFiles << file;
-            part->files << ProjectFile(file, ProjectFile::ObjCXXHeader);
+            const QStringList cxxflags = pro->variableValue(CppFlagsVar);
+            objcppPart->evaluateToolchain(ToolChainKitInformation::toolChain(k),
+                                          cxxflags,
+                                          cxxflags,
+                                          SysRootKitInformation::sysRoot(k));
+
+            if (!objcppPart->files.isEmpty()) {
+                pinfo.appendProjectPart(objcppPart);
+                // TODO: there is no LANG_OBJCXX, so:
+                setProjectLanguage(ProjectExplorer::Constants::LANG_CXX, true);
+            }
         }
 
-        const QStringList cxxflags = pro->variableValue(CppFlagsVar);
-        part->evaluateToolchain(ToolChainKitInformation::toolChain(k),
-                                cxxflags,
-                                cxxflags,
-                                SysRootKitInformation::sysRoot(k));
-
-        pinfo.appendProjectPart(part);
+        if (!objcppPart->files.isEmpty())
+            cppPart->displayName += QLatin1String(" (C++)");
+        if (!cppPart->files.isEmpty())
+            objcppPart->displayName += QLatin1String(" (ObjC++)");
     }
-
-    setProjectLanguage(ProjectExplorer::Constants::LANG_CXX, !allFiles.isEmpty());
 
     // Also update Ui Code Model Support:
     QtSupport::UiCodeModelManager::update(this, uiCodeModelData);

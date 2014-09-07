@@ -63,10 +63,10 @@ def qdump__QByteArray(d, value):
         d.putDisplay(StopDisplay)
     elif format == 2:
         d.putField("editformat", DisplayLatin1String)
-        d.putField("editvalue", d.encodeByteArray(value))
+        d.putField("editvalue", d.encodeByteArray(value, limit=100000))
     elif format == 3:
         d.putField("editformat", DisplayUtf8String)
-        d.putField("editvalue", d.encodeByteArray(value))
+        d.putField("editvalue", d.encodeByteArray(value, limit=100000))
     if d.isExpanded():
         d.putArrayData(data, size, d.charType())
 
@@ -167,9 +167,10 @@ def qdump__QModelIndex(d, value):
     except:
         d.putValue("")
 
-    d.putNumChild(rowCount * columnCount)
+    d.putNumChild(1)
     if d.isExpanded():
         with Children(d):
+            d.putFields(value, False)
             i = 0
             for row in xrange(rowCount):
                 for column in xrange(columnCount):
@@ -1739,7 +1740,7 @@ def qdump__QString(d, value):
         d.putDisplay(StopDisplay)
     elif format == 2:
         d.putField("editformat", DisplayUtf16String)
-        d.putField("editvalue", d.encodeString(value, limit=None))
+        d.putField("editvalue", d.encodeString(value, limit=100000))
     if d.isExpanded():
         d.putArrayData(data, size, d.lookupType(d.qtNamespace() + "QChar"))
 

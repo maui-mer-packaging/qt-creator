@@ -30,7 +30,7 @@
 #include "constants.h"
 
 #include <vcsbase/vcsbaseplugin.h>
-#include <vcsbase/vcsbaseoutputwindow.h>
+#include <vcsbase/vcsoutputwindow.h>
 #include <vcsbase/vcsbaseeditorparameterwidget.h>
 #include <utils/synchronousprocess.h>
 
@@ -39,33 +39,35 @@
 #include <QTextStream>
 #include <QDebug>
 
+using namespace Utils;
+using namespace VcsBase;
+
 namespace Bazaar {
 namespace Internal {
 
-class BazaarDiffExitCodeInterpreter : public Utils::ExitCodeInterpreter
+class BazaarDiffExitCodeInterpreter : public ExitCodeInterpreter
 {
     Q_OBJECT
 public:
-    BazaarDiffExitCodeInterpreter(QObject *parent) : Utils::ExitCodeInterpreter(parent) {}
-    Utils::SynchronousProcessResponse::Result interpretExitCode(int code) const;
-
+    BazaarDiffExitCodeInterpreter(QObject *parent) : ExitCodeInterpreter(parent) {}
+    SynchronousProcessResponse::Result interpretExitCode(int code) const;
 };
 
-Utils::SynchronousProcessResponse::Result BazaarDiffExitCodeInterpreter::interpretExitCode(int code) const
+SynchronousProcessResponse::Result BazaarDiffExitCodeInterpreter::interpretExitCode(int code) const
 {
     if (code < 0 || code > 2)
-        return Utils::SynchronousProcessResponse::FinishedError;
-    return Utils::SynchronousProcessResponse::Finished;
+        return SynchronousProcessResponse::FinishedError;
+    return SynchronousProcessResponse::Finished;
 }
 
 BazaarClient::BazaarClient(BazaarSettings *settings) :
-    VcsBase::VcsBaseClient(settings)
+    VcsBaseClient(settings)
 {
 }
 
 BazaarSettings *BazaarClient::settings() const
 {
-    return dynamic_cast<BazaarSettings *>(VcsBase::VcsBaseClient::settings());
+    return dynamic_cast<BazaarSettings *>(VcsBaseClient::settings());
 }
 
 bool BazaarClient::synchronousSetUserId()
@@ -117,7 +119,7 @@ bool BazaarClient::synchronousUncommit(const QString &workingDir,
     QByteArray stdOut;
     const bool success = vcsFullySynchronousExec(workingDir, args, &stdOut);
     if (!stdOut.isEmpty())
-        VcsBase::VcsBaseOutputWindow::instance()->append(QString::fromUtf8(stdOut));
+        VcsOutputWindow::append(QString::fromUtf8(stdOut));
     return success;
 }
 
@@ -141,10 +143,10 @@ QString BazaarClient::findTopLevelForFile(const QFileInfo &file) const
     const QString repositoryCheckFile =
             QLatin1String(Constants::BAZAARREPO) + QLatin1String("/branch-format");
     return file.isDir() ?
-                VcsBase::VcsBasePlugin::findRepositoryForDirectory(file.absoluteFilePath(),
-                                                                   repositoryCheckFile) :
-                VcsBase::VcsBasePlugin::findRepositoryForDirectory(file.absolutePath(),
-                                                                   repositoryCheckFile);
+                VcsBasePlugin::findRepositoryForDirectory(file.absoluteFilePath(),
+                                                          repositoryCheckFile) :
+                VcsBasePlugin::findRepositoryForDirectory(file.absolutePath(),
+                                                          repositoryCheckFile);
 }
 
 bool BazaarClient::managesFile(const QString &workingDirectory, const QString &fileName) const
@@ -164,21 +166,21 @@ void BazaarClient::view(const QString &source, const QString &id, const QStringL
     VcsBaseClient::view(source, id, args);
 }
 
-Core::Id BazaarClient::vcsEditorKind(VcsCommand cmd) const
+Core::Id BazaarClient::vcsEditorKind(VcsCommandTag cmd) const
 {
     switch (cmd) {
     case AnnotateCommand:
-        return Constants::ANNOTATELOG;
+        return Constants::ANNOTATELOG_ID;
     case DiffCommand:
-        return Constants::DIFFLOG;
+        return Constants::DIFFLOG_ID;
     case LogCommand:
-        return Constants::FILELOG;
+        return Constants::FILELOG_ID;
     default:
         return Core::Id();
     }
 }
 
-QString BazaarClient::vcsCommandString(VcsCommand cmd) const
+QString BazaarClient::vcsCommandString(VcsCommandTag cmd) const
 {
     switch (cmd) {
     case CloneCommand:
@@ -188,7 +190,7 @@ QString BazaarClient::vcsCommandString(VcsCommand cmd) const
     }
 }
 
-Utils::ExitCodeInterpreter *BazaarClient::exitCodeInterpreter(VcsCommand cmd, QObject *parent) const
+ExitCodeInterpreter *BazaarClient::exitCodeInterpreter(VcsCommandTag cmd, QObject *parent) const
 {
     switch (cmd) {
     case DiffCommand:
@@ -267,13 +269,13 @@ struct BazaarCommandParameters
 };
 
 // Parameter widget controlling whitespace diff mode, associated with a parameter
-class BazaarDiffParameterWidget : public VcsBase::VcsBaseEditorParameterWidget
+class BazaarDiffParameterWidget : public VcsBaseEditorParameterWidget
 {
     Q_OBJECT
 public:
     BazaarDiffParameterWidget(BazaarClient *client,
                               const BazaarCommandParameters &p, QWidget *parent = 0) :
-        VcsBase::VcsBaseEditorParameterWidget(parent), m_client(client), m_params(p)
+        VcsBaseEditorParameterWidget(parent), m_client(client), m_params(p)
     {
         mapSetting(addToggleButton(QLatin1String("-w"), tr("Ignore Whitespace")),
                    client->settings()->boolPointer(BazaarSettings::diffIgnoreWhiteSpaceKey));
@@ -304,20 +306,20 @@ private:
     const BazaarCommandParameters m_params;
 };
 
-VcsBase::VcsBaseEditorParameterWidget *BazaarClient::createDiffEditor(
+VcsBaseEditorParameterWidget *BazaarClient::createDiffEditor(
         const QString &workingDir, const QStringList &files, const QStringList &extraOptions)
 {
     const BazaarCommandParameters parameters(workingDir, files, extraOptions);
     return new BazaarDiffParameterWidget(this, parameters);
 }
 
-class BazaarLogParameterWidget : public VcsBase::VcsBaseEditorParameterWidget
+class BazaarLogParameterWidget : public VcsBaseEditorParameterWidget
 {
     Q_OBJECT
 public:
     BazaarLogParameterWidget(BazaarClient *client,
                              const BazaarCommandParameters &p, QWidget *parent = 0) :
-        VcsBase::VcsBaseEditorParameterWidget(parent), m_client(client), m_params(p)
+        VcsBaseEditorParameterWidget(parent), m_client(client), m_params(p)
     {
         BazaarSettings *settings = m_client->settings();
         mapSetting(addToggleButton(QLatin1String("--verbose"), tr("Verbose"),
@@ -349,7 +351,7 @@ private:
     const BazaarCommandParameters m_params;
 };
 
-VcsBase::VcsBaseEditorParameterWidget *BazaarClient::createLogEditor(
+VcsBaseEditorParameterWidget *BazaarClient::createLogEditor(
         const QString &workingDir, const QStringList &files, const QStringList &extraOptions)
 {
     const BazaarCommandParameters parameters(workingDir, files, extraOptions);

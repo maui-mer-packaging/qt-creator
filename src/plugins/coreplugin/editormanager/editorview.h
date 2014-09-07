@@ -112,8 +112,9 @@ protected:
     void focusInEvent(QFocusEvent *);
 
 private slots:
-    void closeView();
+    void closeCurrentEditor();
     void listSelectionActivated(int index);
+    void showListContextMenu(QPoint pos);
     void splitHorizontally();
     void splitVertically();
     void splitNewWindow();
@@ -155,7 +156,7 @@ public slots:
     void goForwardInNavigationHistory();
 
 public:
-    void addCurrentPositionToNavigationHistory(IEditor *editor = 0, const QByteArray &saveState = QByteArray());
+    void addCurrentPositionToNavigationHistory(const QByteArray &saveState = QByteArray());
     void cutForwardNavigationHistory();
 
     inline QList<EditLocation> editorHistory() const { return m_editorHistory; }
@@ -197,6 +198,9 @@ public:
     QSize minimumSizeHint() const;
 
     void unsplitAll();
+
+signals:
+    void splitStateChanged();
 
 private:
     void unsplitAll_helper();

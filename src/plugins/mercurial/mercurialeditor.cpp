@@ -46,8 +46,7 @@
 using namespace Mercurial::Internal;
 using namespace Mercurial;
 
-MercurialEditor::MercurialEditor(const VcsBase::VcsBaseEditorParameters *type, QWidget *parent)
-        : VcsBase::VcsBaseEditorWidget(type, parent),
+MercurialEditorWidget::MercurialEditorWidget() :
         exactIdentifier12(QLatin1String(Constants::CHANGEIDEXACT12)),
         exactIdentifier40(QLatin1String(Constants::CHANGEIDEXACT40)),
         changesetIdentifier12(QLatin1String(Constants::CHANGESETID12)),
@@ -59,7 +58,7 @@ MercurialEditor::MercurialEditor(const VcsBase::VcsBaseEditorParameters *type, Q
     setAnnotatePreviousRevisionTextFormat(tr("Annotate parent revision %1"));
 }
 
-QSet<QString> MercurialEditor::annotationChanges() const
+QSet<QString> MercurialEditorWidget::annotationChanges() const
 {
     QSet<QString> changes;
     const QString data = toPlainText();
@@ -75,7 +74,7 @@ QSet<QString> MercurialEditor::annotationChanges() const
     return changes;
 }
 
-QString MercurialEditor::changeUnderCursor(const QTextCursor &cursorIn) const
+QString MercurialEditorWidget::changeUnderCursor(const QTextCursor &cursorIn) const
 {
     QTextCursor cursor = cursorIn;
     cursor.select(QTextCursor::WordUnderCursor);
@@ -89,12 +88,12 @@ QString MercurialEditor::changeUnderCursor(const QTextCursor &cursorIn) const
     return QString();
 }
 
-VcsBase::BaseAnnotationHighlighter *MercurialEditor::createAnnotationHighlighter(const QSet<QString> &changes) const
+VcsBase::BaseAnnotationHighlighter *MercurialEditorWidget::createAnnotationHighlighter(const QSet<QString> &changes) const
 {
     return new MercurialAnnotationHighlighter(changes);
 }
 
-QString MercurialEditor::decorateVersion(const QString &revision) const
+QString MercurialEditorWidget::decorateVersion(const QString &revision) const
 {
     const QFileInfo fi(source());
     const QString workingDirectory = fi.absolutePath();
@@ -102,7 +101,7 @@ QString MercurialEditor::decorateVersion(const QString &revision) const
     return MercurialPlugin::client()->shortDescriptionSync(workingDirectory, revision);
 }
 
-QStringList MercurialEditor::annotationPreviousVersions(const QString &revision) const
+QStringList MercurialEditorWidget::annotationPreviousVersions(const QString &revision) const
 {
     const QFileInfo fi(source());
     const QString workingDirectory = fi.absolutePath();

@@ -32,14 +32,14 @@
 
 #include <texteditor/autocompleter.h>
 
-namespace GLSLEditor {
+namespace GlslEditor {
 namespace Internal {
 
-class GLSLCompleter : public TextEditor::AutoCompleter
+class GlslCompleter : public TextEditor::AutoCompleter
 {
 public:
-    GLSLCompleter();
-    virtual ~GLSLCompleter();
+    GlslCompleter();
+    virtual ~GlslCompleter();
 
     virtual bool contextAllowsAutoParentheses(const QTextCursor &cursor,
                                               const QString &textToInsert = QString()) const;
@@ -52,7 +52,7 @@ public:
     virtual QString insertParagraphSeparator(const QTextCursor &cursor) const;
 };
 
-} // Internal
-} // GLSLEditor
+} // namespace Internal
+} // namespace GlslEditor
 
 #endif // GLSLAUTOCOMPLETER_H

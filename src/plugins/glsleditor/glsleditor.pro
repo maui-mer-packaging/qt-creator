@@ -6,28 +6,22 @@ DEFINES += \
 HEADERS += \
 glsleditor.h \
 glsleditorconstants.h \
-glsleditoreditable.h \
-glsleditorfactory.h \
 glsleditorplugin.h \
 glslfilewizard.h \
 glslhighlighter.h \
 glslautocompleter.h \
 glslindenter.h \
 glslhoverhandler.h \
-    glslcompletionassist.h \
-    reuse.h
+glslcompletionassist.h
 
 SOURCES += \
 glsleditor.cpp \
-glsleditoreditable.cpp \
-glsleditorfactory.cpp \
 glsleditorplugin.cpp \
 glslfilewizard.cpp \
 glslhighlighter.cpp \
 glslautocompleter.cpp \
 glslindenter.cpp \
 glslhoverhandler.cpp \
-    glslcompletionassist.cpp \
-    reuse.cpp
+glslcompletionassist.cpp
 
 RESOURCES += glsleditor.qrc

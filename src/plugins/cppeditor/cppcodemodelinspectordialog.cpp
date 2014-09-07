@@ -30,12 +30,14 @@
 #include "cppcodemodelinspectordialog.h"
 #include "ui_cppcodemodelinspectordialog.h"
 #include "cppeditor.h"
+#include "cppeditordocument.h"
 
 #include <coreplugin/editormanager/editormanager.h>
 #include <coreplugin/icore.h>
+#include <cpptools/builtineditordocumentparser.h>
 #include <cpptools/cppcodemodelinspectordumper.h>
 #include <cpptools/cppmodelmanager.h>
-#include <cpptools/cpptoolseditorsupport.h>
+#include <cpptools/cppworkingcopy.h>
 #include <projectexplorer/project.h>
 
 #include <cplusplus/CppDocument.h>
@@ -948,11 +950,11 @@ class ProjectPartsModel : public QAbstractListModel
 public:
     ProjectPartsModel(QObject *parent);
 
-    void configure(const QList<CppModelManagerInterface::ProjectInfo> &projectInfos,
+    void configure(const QList<ProjectInfo> &projectInfos,
                    const ProjectPart::Ptr &currentEditorsProjectPart);
 
     QModelIndex indexForCurrentEditorsProjectPart() const;
-    ProjectPart::Ptr projectPartForProjectFile(const QString &projectFilePath) const;
+    ProjectPart::Ptr projectPartForProjectId(const QString &projectPartId) const;
 
     enum Columns { PartNameColumn, PartFilePathColumn, ColumnCount };
 
@@ -971,12 +973,12 @@ ProjectPartsModel::ProjectPartsModel(QObject *parent)
 {
 }
 
-void ProjectPartsModel::configure(const QList<CppModelManagerInterface::ProjectInfo> &projectInfos,
+void ProjectPartsModel::configure(const QList<ProjectInfo> &projectInfos,
                                   const ProjectPart::Ptr &currentEditorsProjectPart)
 {
     emit layoutAboutToBeChanged();
     m_projectPartsList.clear();
-    foreach (const CppModelManagerInterface::ProjectInfo &info, projectInfos) {
+    foreach (const ProjectInfo &info, projectInfos) {
         foreach (const ProjectPart::Ptr &projectPart, info.projectParts()) {
             if (!m_projectPartsList.contains(projectPart)) {
                 m_projectPartsList << projectPart;
@@ -995,10 +997,10 @@ QModelIndex ProjectPartsModel::indexForCurrentEditorsProjectPart() const
     return createIndex(m_currentEditorsProjectPartIndex, PartFilePathColumn);
 }
 
-ProjectPart::Ptr ProjectPartsModel::projectPartForProjectFile(const QString &projectFilePath) const
+ProjectPart::Ptr ProjectPartsModel::projectPartForProjectId(const QString &projectPartId) const
 {
     foreach (const ProjectPart::Ptr &part, m_projectPartsList) {
-        if (part->projectFile == projectFilePath)
+        if (part->id() == projectPartId)
             return part;
     }
     return ProjectPart::Ptr();
@@ -1023,6 +1025,8 @@ QVariant ProjectPartsModel::data(const QModelIndex &index, int role) const
             return m_projectPartsList.at(row)->displayName;
         else if (column == PartFilePathColumn)
             return QDir::toNativeSeparators(m_projectPartsList.at(row)->projectFile);
+    } else if (role == Qt::UserRole) {
+        return m_projectPartsList.at(row)->id();
     }
     return QVariant();
 }
@@ -1050,7 +1054,7 @@ class WorkingCopyModel : public QAbstractListModel
 public:
     WorkingCopyModel(QObject *parent);
 
-    void configure(const CppModelManagerInterface::WorkingCopy &workingCopy);
+    void configure(const WorkingCopy &workingCopy);
     QModelIndex indexForFile(const QString &filePath);
 
     enum Columns { RevisionColumn, FilePathColumn, ColumnCount };
@@ -1078,7 +1082,7 @@ WorkingCopyModel::WorkingCopyModel(QObject *parent) : QAbstractListModel(parent)
 {
 }
 
-void WorkingCopyModel::configure(const CppModelManagerInterface::WorkingCopy &workingCopy)
+void WorkingCopyModel::configure(const WorkingCopy &workingCopy)
 {
     emit layoutAboutToBeChanged();
     m_workingCopyList.clear();
@@ -1305,9 +1309,8 @@ void CppCodeModelInspectorDialog::onProjectPartSelected(const QModelIndex &curre
         QModelIndex index = m_proxyProjectPartsModel->mapToSource(current);
         if (index.isValid()) {
             index = m_projectPartsModel->index(index.row(), ProjectPartsModel::PartFilePathColumn);
-            const QString projectFilePath = QDir::fromNativeSeparators(
-                m_projectPartsModel->data(index, Qt::DisplayRole).toString());
-            updateProjectPartData(m_projectPartsModel->projectPartForProjectFile(projectFilePath));
+            const QString projectPartId = m_projectPartsModel->data(index, Qt::UserRole).toString();
+            updateProjectPartData(m_projectPartsModel->projectPartForProjectId(projectPartId));
         }
     } else {
         clearProjectPartData();
@@ -1357,11 +1360,13 @@ void CppCodeModelInspectorDialog::refresh()
     dumper.dumpSnapshot(globalSnapshot, globalSnapshotTitle, /*isGlobalSnapshot=*/ true);
 
     TextEditor::BaseTextEditor *editor = currentEditor();
-    CppEditorSupport *editorSupport = 0;
+    EditorDocumentHandle *editorDocument = 0;
     if (editor) {
-        editorSupport = cmmi->cppEditorSupport(editor);
-        if (editorSupport) {
-            const CPlusPlus::Snapshot editorSnapshot = editorSupport->snapshotUpdater()->snapshot();
+        const QString editorFilePath = editor->document()->filePath();
+        editorDocument = cmmi->editorDocument(editorFilePath);
+        if (editorDocument) {
+            const CPlusPlus::Snapshot editorSnapshot
+                = BuiltinEditorDocumentParser::get(editorFilePath)->snapshot();
             m_snapshotInfos->append(SnapshotInfo(editorSnapshot, SnapshotInfo::EditorSnapshot));
             const QString editorSnapshotTitle
                 = QString::fromLatin1("Current Editor's Snapshot (%1 Documents)")
@@ -1369,8 +1374,7 @@ void CppCodeModelInspectorDialog::refresh()
             dumper.dumpSnapshot(editorSnapshot, editorSnapshotTitle);
             m_ui->snapshotSelector->addItem(editorSnapshotTitle);
         }
-        CppEditor::Internal::CppEditorWidget *cppEditorWidget
-            = qobject_cast<CppEditor::Internal::CppEditorWidget *>(editor->editorWidget());
+        CppEditorWidget *cppEditorWidget = qobject_cast<CppEditorWidget *>(editor->editorWidget());
         if (cppEditorWidget) {
             SemanticInfo semanticInfo = cppEditorWidget->semanticInfo();
             CPlusPlus::Snapshot snapshot;
@@ -1411,11 +1415,11 @@ void CppCodeModelInspectorDialog::refresh()
     onSnapshotSelected(snapshotIndex);
 
     // Project Parts
-    const ProjectPart::Ptr editorsProjectPart = editorSupport
-        ? editorSupport->snapshotUpdater()->currentProjectPart()
+    const ProjectPart::Ptr editorsProjectPart = editorDocument
+        ? editorDocument->processor()->parser()->projectPart()
         : ProjectPart::Ptr();
 
-    const QList<CppModelManagerInterface::ProjectInfo> projectInfos = cmmi->projectInfos();
+    const QList<ProjectInfo> projectInfos = cmmi->projectInfos();
     dumper.dumpProjectInfos(projectInfos);
     m_projectPartsModel->configure(projectInfos, editorsProjectPart);
     m_projectPartsView->resizeColumns(ProjectPartsModel::ColumnCount);
@@ -1431,7 +1435,7 @@ void CppCodeModelInspectorDialog::refresh()
     }
 
     // Working Copy
-    const CppModelManagerInterface::WorkingCopy workingCopy = cmmi->workingCopy();
+    const WorkingCopy workingCopy = cmmi->workingCopy();
     dumper.dumpWorkingCopy(workingCopy);
     m_workingCopyModel->configure(workingCopy);
     m_workingCopyView->resizeColumns(WorkingCopyModel::ColumnCount);

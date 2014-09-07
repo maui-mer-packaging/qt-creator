@@ -34,13 +34,13 @@
 #include "qmlprofiler_global.h"
 #include "qmlprofilermodelmanager.h"
 #include "qmlprofilerdatamodel.h"
-#include <QObject>
+#include "sortedtimelinemodel.h"
 #include <QVariant>
 #include <QColor>
 
 namespace QmlProfiler {
 
-class QMLPROFILER_EXPORT AbstractTimelineModel : public QObject
+class QMLPROFILER_EXPORT AbstractTimelineModel : public SortedTimelineModel
 {
     Q_OBJECT
 
@@ -50,7 +50,6 @@ public:
 
     // Trivial methods implemented by the abstract model itself
     void setModelManager(QmlProfilerModelManager *modelManager);
-    QString name() const;
     bool isEmpty() const;
 
     // Methods are directly passed on to the private model and relying on its virtual methods.
@@ -59,42 +58,33 @@ public:
     void setRowHeight(int rowNumber, int height);
     int height() const;
 
-    Q_INVOKABLE qint64 lastTimeMark() const;
-    Q_INVOKABLE qint64 traceStartTime() const;
-    Q_INVOKABLE qint64 traceEndTime() const;
-    Q_INVOKABLE qint64 traceDuration() const;
-    Q_INVOKABLE int getState() const;
-    Q_INVOKABLE qint64 getDuration(int index) const;
-    Q_INVOKABLE qint64 getStartTime(int index) const;
-    Q_INVOKABLE qint64 getEndTime(int index) const;
-    int findFirstIndex(qint64 startTime) const;
-    int findFirstIndexNoParents(qint64 startTime) const;
-    int findLastIndex(qint64 endTime) const;
-    int count() const;
-    bool eventAccepted(const QmlProfilerDataModel::QmlEventTypeData &event) const;
+    qint64 traceStartTime() const;
+    qint64 traceEndTime() const;
+    qint64 traceDuration() const;
+    bool accepted(const QmlProfilerDataModel::QmlEventTypeData &event) const;
     bool expanded() const;
     void setExpanded(bool expanded);
-    const QString title() const;
+    QString displayName() const;
 
     // Methods that have to be implemented by child models
     virtual int rowCount() const = 0;
-    Q_INVOKABLE virtual int getEventId(int index) const = 0;
-    Q_INVOKABLE virtual QColor getColor(int index) const = 0;
-    virtual const QVariantList getLabels() const = 0;
-    Q_INVOKABLE virtual const QVariantList getEventDetails(int index) const = 0;
-    virtual int getEventRow(int index) const = 0;
+    virtual int eventId(int index) const = 0;
+    virtual QColor color(int index) const = 0;
+    virtual QVariantList labels() const = 0;
+    virtual QVariantMap details(int index) const = 0;
+    virtual int row(int index) const = 0;
     virtual void loadData() = 0;
-    virtual void clear() = 0;
 
     // Methods which can optionally be implemented by child models.
     // returned map should contain "file", "line", "column" properties, or be empty
-    Q_INVOKABLE virtual const QVariantMap getEventLocation(int index) const;
-    Q_INVOKABLE virtual int getEventIdForTypeIndex(int typeIndex) const;
-    Q_INVOKABLE virtual int getEventIdForLocation(const QString &filename, int line, int column) const;
-    Q_INVOKABLE virtual int getBindingLoopDest(int index) const;
-    Q_INVOKABLE virtual float getHeight(int index) const;
+    virtual QVariantMap location(int index) const;
+    virtual int eventIdForTypeIndex(int typeIndex) const;
+    virtual int eventIdForLocation(const QString &filename, int line, int column) const;
+    virtual int bindingLoopDest(int index) const;
+    virtual float height(int index) const;
     virtual int rowMinValue(int rowNumber) const;
     virtual int rowMaxValue(int rowNumber) const;
+    virtual void clear();
 
 signals:
     void expandedChanged();
@@ -111,24 +101,24 @@ protected:
         Lightness = 166
     };
 
-    QColor getEventColor(int index) const
+    QColor colorByEventId(int index) const
     {
-        return getColorByHue(getEventId(index) * EventHueMultiplier);
+        return colorByHue(eventId(index) * EventHueMultiplier);
     }
 
-    QColor getFractionColor(double fraction) const
+    QColor colorByFraction(double fraction) const
     {
-        return getColorByHue(fraction * FractionHueMultiplier + FractionHueMininimum);
+        return colorByHue(fraction * FractionHueMultiplier + FractionHueMininimum);
     }
 
-    QColor getColorByHue(int hue) const
+    QColor colorByHue(int hue) const
     {
         return QColor::fromHsl(hue % 360, Saturation, Lightness);
     }
 
-    explicit AbstractTimelineModel(AbstractTimelineModelPrivate *dd, const QString &name,
-                                   const QString &label, QmlDebug::Message message,
-                                   QmlDebug::RangeType rangeType, QObject *parent);
+    explicit AbstractTimelineModel(AbstractTimelineModelPrivate *dd, const QString &displayName,
+                                   QmlDebug::Message message, QmlDebug::RangeType rangeType,
+                                   QObject *parent);
     AbstractTimelineModelPrivate *d_ptr;
 
 protected slots:

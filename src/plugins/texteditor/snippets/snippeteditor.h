@@ -35,30 +35,12 @@
 
 namespace TextEditor {
 
-class SnippetEditorWidget;
-class SyntaxHighlighter;
-class Indenter;
-
-// Should not be necessary in this case, but the base text editor assumes a
-// valid editable interface.
-class TEXTEDITOR_EXPORT SnippetEditor : public BaseTextEditor
-{
-    Q_OBJECT
-
-public:
-    SnippetEditor(SnippetEditorWidget *editorWidget);
-
-    Core::IEditor *duplicate() { return 0; }
-};
-
 class TEXTEDITOR_EXPORT SnippetEditorWidget : public BaseTextEditorWidget
 {
     Q_OBJECT
 
 public:
-    SnippetEditorWidget(QWidget *parent);
-
-    void setSyntaxHighlighter(SyntaxHighlighter *highlighter);
+    SnippetEditorWidget(QWidget *parent = 0);
 
 signals:
     void snippetContentChanged();
@@ -67,9 +49,8 @@ protected:
     virtual void focusOutEvent(QFocusEvent *event);
 
     virtual int extraAreaWidth(int * /* markWidthPtr */ = 0) const { return 0; }
-    virtual BaseTextEditor *createEditor();
 };
 
-} // TextEditor
+} // namespace TextEditor
 
 #endif // SNIPPETEDITOR_H

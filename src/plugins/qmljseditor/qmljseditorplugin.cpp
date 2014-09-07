@@ -32,7 +32,6 @@
 #include "qmljseditor.h"
 #include "qmljseditorconstants.h"
 #include "qmljseditordocument.h"
-#include "qmljseditorfactory.h"
 #include "qmljshoverhandler.h"
 #include "qmlfilewizard.h"
 #include "jsfilewizard.h"
@@ -93,7 +92,6 @@ QmlJSEditorPlugin *QmlJSEditorPlugin::m_instance = 0;
 
 QmlJSEditorPlugin::QmlJSEditorPlugin() :
         m_modelManager(0),
-    m_editor(0),
     m_quickFixAssistProvider(0),
     m_reformatFileAction(0),
     m_currentDocument(0),
@@ -106,7 +104,6 @@ QmlJSEditorPlugin::QmlJSEditorPlugin() :
 
 QmlJSEditorPlugin::~QmlJSEditorPlugin()
 {
-    removeObject(m_editor);
     m_instance = 0;
 }
 
@@ -116,7 +113,7 @@ bool QmlJSEditorPlugin::initialize(const QStringList & /*arguments*/, QString *e
     addAutoReleasedObject(new QmlJSSnippetProvider);
 
     auto hf = new TextEditor::HighlighterFactory;
-    hf->setProductType<Highlighter>();
+    hf->setProductType<QmlJSHighlighter>();
     hf->setId(Constants::C_QMLJSEDITOR_ID);
     hf->addMimeType(QmlJSTools::Constants::QML_MIMETYPE);
     hf->addMimeType(QmlJSTools::Constants::QMLPROJECT_MIMETYPE);
@@ -142,8 +139,7 @@ bool QmlJSEditorPlugin::initialize(const QStringList & /*arguments*/, QString *e
 
     Core::Context context(Constants::C_QMLJSEDITOR_ID);
 
-    m_editor = new QmlJSEditorFactory(this);
-    addObject(m_editor);
+    addAutoReleasedObject(new QmlJSEditorFactory);
 
     IWizardFactory *wizard = new QmlFileWizard;
     wizard->setWizardKind(Core::IWizardFactory::FileWizard);
@@ -269,13 +265,13 @@ Utils::JsonSchemaManager *QmlJSEditorPlugin::jsonManager() const
 
 void QmlJSEditorPlugin::findUsages()
 {
-    if (QmlJSTextEditorWidget *editor = qobject_cast<QmlJSTextEditorWidget*>(Core::EditorManager::currentEditor()->widget()))
+    if (QmlJSEditorWidget *editor = qobject_cast<QmlJSEditorWidget*>(Core::EditorManager::currentEditor()->widget()))
         editor->findUsages();
 }
 
 void QmlJSEditorPlugin::renameUsages()
 {
-    if (QmlJSTextEditorWidget *editor = qobject_cast<QmlJSTextEditorWidget*>(Core::EditorManager::currentEditor()->widget()))
+    if (QmlJSEditorWidget *editor = qobject_cast<QmlJSEditorWidget*>(Core::EditorManager::currentEditor()->widget()))
         editor->renameUsages();
 }
 
@@ -294,7 +290,7 @@ void QmlJSEditorPlugin::reformatFile()
 
 void QmlJSEditorPlugin::showContextPane()
 {
-    if (QmlJSTextEditorWidget *editor = qobject_cast<QmlJSTextEditorWidget*>(Core::EditorManager::currentEditor()->widget()))
+    if (QmlJSEditorWidget *editor = qobject_cast<QmlJSEditorWidget*>(Core::EditorManager::currentEditor()->widget()))
         editor->showContextPane();
 }
 
@@ -345,5 +341,3 @@ void QmlJSEditorPlugin::checkCurrentEditorSemanticInfoUpToDate()
 }
 
 } // namespace QmlJSEditor
-
-Q_EXPORT_PLUGIN(QmlJSEditor::Internal::QmlJSEditorPlugin)

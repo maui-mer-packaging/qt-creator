@@ -35,7 +35,7 @@
 #include "submiteditorwidget.h"
 #include "submitfieldwidget.h"
 #include "submitfilemodel.h"
-#include "vcsbaseoutputwindow.h"
+#include "vcsoutputwindow.h"
 #include "vcsplugin.h"
 
 #include <aggregation/aggregate.h>
@@ -181,7 +181,6 @@ VcsBaseSubmitEditor::VcsBaseSubmitEditor(const VcsBaseSubmitEditorParameters *pa
                                          SubmitEditorWidget *editorWidget) :
     d(new VcsBaseSubmitEditorPrivate(parameters, editorWidget, this))
 {
-    setContext(Core::Context(parameters->context));
     setWidget(d->m_widget);
     document()->setDisplayName(QCoreApplication::translate("VCS", d->m_parameters->displayName));
 
@@ -579,8 +578,13 @@ VcsBaseSubmitEditor::PromptSubmitResult
         }
     } else {
         // Check failed.
+        QMessageBox::StandardButtons buttons;
+        if (canCommitOnFailure)
+            buttons = QMessageBox::Yes|QMessageBox::No|QMessageBox::Cancel;
+        else
+            buttons = QMessageBox::Yes|QMessageBox::No;
         QMessageBox msgBox(QMessageBox::Question, title, checkFailureQuestion,
-                           QMessageBox::Yes|QMessageBox::No|QMessageBox::Cancel, parent);
+                           buttons, parent);
         msgBox.setDefaultButton(QMessageBox::Cancel);
         msgBox.setInformativeText(errorMessage);
         msgBox.setMinimumWidth(checkDialogMinimumWidth);
@@ -677,8 +681,7 @@ bool VcsBaseSubmitEditor::runSubmitMessageCheckScript(const QString &checkScript
     if (!saver.finalize(errorMessage))
         return false;
     // Run check process
-    VcsBaseOutputWindow *outputWindow = VcsBaseOutputWindow::instance();
-    outputWindow->appendCommand(msgCheckScript(d->m_checkScriptWorkingDirectory, checkScript));
+    VcsOutputWindow::appendCommand(msgCheckScript(d->m_checkScriptWorkingDirectory, checkScript));
     QProcess checkProcess;
     if (!d->m_checkScriptWorkingDirectory.isEmpty())
         checkProcess.setWorkingDirectory(d->m_checkScriptWorkingDirectory);
@@ -702,15 +705,15 @@ bool VcsBaseSubmitEditor::runSubmitMessageCheckScript(const QString &checkScript
         return false;
     }
     if (!stdOutData.isEmpty())
-        outputWindow->appendSilently(QString::fromLocal8Bit(stdOutData));
+        VcsOutputWindow::appendSilently(QString::fromLocal8Bit(stdOutData));
     const QString stdErr = QString::fromLocal8Bit(stdErrData);
     if (!stdErr.isEmpty())
-        outputWindow->appendSilently(stdErr);
+        VcsOutputWindow::appendSilently(stdErr);
     const int exitCode = checkProcess.exitCode();
     if (exitCode != 0) {
         const QString exMessage = tr("The check script returned exit code %1.").
                                   arg(exitCode);
-        outputWindow->appendError(exMessage);
+        VcsOutputWindow::appendError(exMessage);
         *errorMessage = stdErr;
         if (errorMessage->isEmpty())
             *errorMessage = exMessage;

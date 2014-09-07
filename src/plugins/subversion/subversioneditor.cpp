@@ -44,9 +44,7 @@
 using namespace Subversion;
 using namespace Subversion::Internal;
 
-SubversionEditor::SubversionEditor(const VcsBase::VcsBaseEditorParameters *type,
-                                   QWidget *parent) :
-    VcsBase::VcsBaseEditorWidget(type, parent),
+SubversionEditorWidget::SubversionEditorWidget() :
     m_changeNumberPattern(QLatin1String("^\\d+$")),
     m_revisionNumberPattern(QLatin1String("^r\\d+$"))
 {
@@ -66,7 +64,7 @@ SubversionEditor::SubversionEditor(const VcsBase::VcsBaseEditorParameters *type,
     setAnnotateRevisionTextFormat(tr("Annotate revision \"%1\""));
 }
 
-QSet<QString> SubversionEditor::annotationChanges() const
+QSet<QString> SubversionEditorWidget::annotationChanges() const
 {
     QSet<QString> changes;
     const QString txt = toPlainText();
@@ -90,7 +88,7 @@ QSet<QString> SubversionEditor::annotationChanges() const
     return changes;
 }
 
-QString SubversionEditor::changeUnderCursor(const QTextCursor &c) const
+QString SubversionEditorWidget::changeUnderCursor(const QTextCursor &c) const
 {
     QTextCursor cursor = c;
     // Any number is regarded as change number.
@@ -109,12 +107,12 @@ QString SubversionEditor::changeUnderCursor(const QTextCursor &c) const
     return QString();
 }
 
-VcsBase::BaseAnnotationHighlighter *SubversionEditor::createAnnotationHighlighter(const QSet<QString> &changes) const
+VcsBase::BaseAnnotationHighlighter *SubversionEditorWidget::createAnnotationHighlighter(const QSet<QString> &changes) const
 {
     return new SubversionAnnotationHighlighter(changes);
 }
 
-QStringList SubversionEditor::annotationPreviousVersions(const QString &v) const
+QStringList SubversionEditorWidget::annotationPreviousVersions(const QString &v) const
 {
     bool ok;
     const int revision = v.toInt(&ok);

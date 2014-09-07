@@ -29,7 +29,7 @@
 
 #include "glslhoverhandler.h"
 #include "glsleditor.h"
-#include "glsleditoreditable.h"
+#include "glsleditorconstants.h"
 
 #include <coreplugin/editormanager/ieditor.h>
 #include <coreplugin/editormanager/editormanager.h>
@@ -37,36 +37,33 @@
 #include <extensionsystem/pluginmanager.h>
 #include <texteditor/basetexteditor.h>
 
-#include <QTextCursor>
-#include <QUrl>
-
-using namespace GLSLEditor;
-using namespace GLSLEditor::Internal;
 using namespace Core;
 
-GLSLHoverHandler::GLSLHoverHandler(QObject *parent) : BaseHoverHandler(parent)
+namespace GlslEditor {
+namespace Internal {
+
+GlslHoverHandler::GlslHoverHandler(QObject *parent) : BaseHoverHandler(parent)
 {}
 
-GLSLHoverHandler::~GLSLHoverHandler()
+GlslHoverHandler::~GlslHoverHandler()
 {}
 
-bool GLSLHoverHandler::acceptEditor(IEditor *editor)
+bool GlslHoverHandler::acceptEditor(IEditor *editor)
 {
-    if (qobject_cast<GlslEditor *>(editor) != 0)
-        return true;
-    return false;
+    return editor->context().contains(Constants::C_GLSLEDITOR_ID);
 }
 
-void GLSLHoverHandler::identifyMatch(TextEditor::BaseTextEditor *editor, int pos)
+void GlslHoverHandler::identifyMatch(TextEditor::BaseTextEditor *editor, int pos)
 {
-    if (GlslEditorWidget *glslEditor = qobject_cast<GlslEditorWidget *>(editor->widget())) {
-        if (! glslEditor->extraSelectionTooltip(pos).isEmpty())
-            setToolTip(glslEditor->extraSelectionTooltip(pos));
-    }
+    if (!editor->editorWidget()->extraSelectionTooltip(pos).isEmpty())
+        setToolTip(editor->editorWidget()->extraSelectionTooltip(pos));
 }
 
-void GLSLHoverHandler::decorateToolTip()
+void GlslHoverHandler::decorateToolTip()
 {
     if (Qt::mightBeRichText(toolTip()))
-        setToolTip(Qt::escape(toolTip()));
+        setToolTip(toolTip().toHtmlEscaped());
 }
+
+} // namespace Internal
+} // namespace GlslEditor

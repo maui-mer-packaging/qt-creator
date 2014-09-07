@@ -24,10 +24,6 @@ QtcPlugin {
         "glsleditor.h",
         "glsleditor.qrc",
         "glsleditorconstants.h",
-        "glsleditoreditable.cpp",
-        "glsleditoreditable.h",
-        "glsleditorfactory.cpp",
-        "glsleditorfactory.h",
         "glsleditorplugin.cpp",
         "glsleditorplugin.h",
         "glslfilewizard.cpp",
@@ -38,7 +34,5 @@ QtcPlugin {
         "glslhoverhandler.h",
         "glslindenter.cpp",
         "glslindenter.h",
-        "reuse.cpp",
-        "reuse.h",
     ]
 }

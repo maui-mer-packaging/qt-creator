@@ -105,6 +105,8 @@ private:
     ClassOrNamespace *findOrCreateType(const Name *name, ClassOrNamespace *origin = 0,
                                        Class *clazz = 0);
 
+    ClassOrNamespace *findOrCreateNestedAnonymousType(const AnonymousNameId *anonymousNameId);
+
     void addTodo(Symbol *symbol);
     void addSymbol(Symbol *symbol);
     void addUnscopedEnum(Enum *e);
@@ -128,8 +130,8 @@ private:
                                   Subst &subst,
                                   ClassOrNamespace *enclosingTemplateClassInstantiation);
     bool isInstantiateNestedClassNeeded(const QList<Symbol *>& symbols, const Subst &subst) const;
-    ClassOrNamespace *findSpecializationWithPointer(const TemplateNameId *templId,
-                                           const TemplateNameIdTable &specializations);
+    ClassOrNamespace *findSpecialization(const TemplateNameId *templId,
+                                         const TemplateNameIdTable &specializations);
 
     CreateBindings *_factory;
     ClassOrNamespace *_parent;

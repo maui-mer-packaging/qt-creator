@@ -30,6 +30,7 @@
 #include "formeditorplugin.h"
 #include "formeditorfactory.h"
 #include "formeditorw.h"
+#include "formwindoweditor.h"
 #include "formwizard.h"
 
 #ifdef CPP_ENABLED
@@ -200,5 +201,3 @@ void FormEditorPlugin::switchSourceForm()
     if (!fileToOpen.isEmpty())
         Core::EditorManager::openEditor(fileToOpen);
 }
-
-Q_EXPORT_PLUGIN(FormEditorPlugin)

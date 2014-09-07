@@ -32,14 +32,14 @@
 
 #include <texteditor/indenter.h>
 
-namespace GLSLEditor {
+namespace GlslEditor {
 namespace Internal {
 
-class GLSLIndenter : public TextEditor::Indenter
+class GlslIndenter : public TextEditor::Indenter
 {
 public:
-    GLSLIndenter();
-    virtual ~GLSLIndenter();
+    GlslIndenter();
+    virtual ~GlslIndenter();
 
     virtual bool isElectricCharacter(const QChar &ch) const;
     virtual void indentBlock(QTextDocument *doc,
@@ -53,7 +53,7 @@ public:
                         const TextEditor::TabSettings &tabSettings);
 };
 
-} // Internal
-} // GLSLEditor
+} // namespace Internal
+} // namespace GlslEditor
 
 #endif // GLSLINDENTER_H

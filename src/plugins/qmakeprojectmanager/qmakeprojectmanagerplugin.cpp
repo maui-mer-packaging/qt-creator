@@ -29,6 +29,7 @@
 
 #include "qmakeprojectmanagerplugin.h"
 
+#include "profileeditor.h"
 #include "qmakeprojectmanager.h"
 #include "qmakenodes.h"
 #include "qmakestep.h"
@@ -43,7 +44,6 @@
 #include "wizards/subdirsprojectwizard.h"
 #include "wizards/qtquickappwizard.h"
 #include "customwidgetwizard/customwidgetwizard.h"
-#include "profileeditorfactory.h"
 #include "profilehoverhandler.h"
 #include "qmakeprojectmanagerconstants.h"
 #include "qmakeproject.h"
@@ -90,8 +90,6 @@ QmakeProjectManagerPlugin::~QmakeProjectManagerPlugin()
     //removeObject(m_embeddedPropertiesPage);
     //delete m_embeddedPropertiesPage;
 
-    removeObject(m_proFileEditorFactory);
-    delete m_proFileEditorFactory;
     removeObject(m_qmakeProjectManager);
     delete m_qmakeProjectManager;
 }
@@ -108,15 +106,12 @@ bool QmakeProjectManagerPlugin::initialize(const QStringList &arguments, QString
     m_projectExplorer = ProjectExplorerPlugin::instance();
 
     //create and register objects
-    m_qmakeProjectManager = new QmakeManager(this);
+    m_qmakeProjectManager = new QmakeManager;
     addObject(m_qmakeProjectManager);
-
-    m_proFileEditorFactory = new ProFileEditorFactory(m_qmakeProjectManager);
 
     ProjectExplorer::KitManager::registerKitInformation(new QmakeKitInformation);
 
-    addObject(m_proFileEditorFactory);
-
+    addAutoReleasedObject(new ProFileEditorFactory);
     addAutoReleasedObject(new EmptyProjectWizard);
     addAutoReleasedObject(new SubdirsProjectWizard);
     addAutoReleasedObject(new GuiAppWizard);
@@ -259,7 +254,7 @@ bool QmakeProjectManagerPlugin::initialize(const QStringList &arguments, QString
 
     Core::ActionContainer *contextMenu = Core::ActionManager::createMenu(QmakeProjectManager::Constants::M_CONTEXT);
 
-    Core::Context proFileEditorContext = Core::Context(QmakeProjectManager::Constants::C_PROFILEEDITOR);
+    Core::Context proFileEditorContext = Core::Context(QmakeProjectManager::Constants::PROFILE_EDITOR_ID);
 
     command = Core::ActionManager::command(TextEditor::Constants::JUMP_TO_FILE_UNDER_CURSOR);
     contextMenu->addAction(command);
@@ -426,5 +421,3 @@ void QmakeProjectManagerPlugin::updateBuildFileAction()
     m_buildFileAction->setVisible(visible);
     m_buildFileAction->setEnabled(enabled);
 }
-
-Q_EXPORT_PLUGIN(QmakeProjectManagerPlugin)

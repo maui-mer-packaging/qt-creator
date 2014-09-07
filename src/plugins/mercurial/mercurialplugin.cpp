@@ -58,7 +58,7 @@
 #include <vcsbase/basevcssubmiteditorfactory.h>
 #include <vcsbase/vcsbaseeditor.h>
 #include <vcsbase/vcsbaseconstants.h>
-#include <vcsbase/vcsbaseoutputwindow.h>
+#include <vcsbase/vcsoutputwindow.h>
 
 #include <QtPlugin>
 #include <QAction>
@@ -79,27 +79,21 @@ using namespace Utils;
 namespace Mercurial {
 namespace Internal {
 
-using namespace VcsBase::Constants;
-using namespace Mercurial::Constants;
-
 static const VcsBaseEditorParameters editorParameters[] = {
 {
     LogOutput,
-    FILELOG_ID,
-    FILELOG_DISPLAY_NAME,
-    FILELOG,
-    LOGAPP},
+    Constants::FILELOG_ID,
+    Constants::FILELOG_DISPLAY_NAME,
+    Constants::LOGAPP},
 
 {   AnnotateOutput,
     Constants::ANNOTATELOG_ID,
     Constants::ANNOTATELOG_DISPLAY_NAME,
-    Constants::ANNOTATELOG,
     Constants::ANNOTATEAPP},
 
 {   DiffOutput,
     Constants::DIFFLOG_ID,
     Constants::DIFFLOG_DISPLAY_NAME,
-    Constants::DIFFLOG,
     Constants::DIFFAPP}
 };
 
@@ -107,8 +101,7 @@ static const VcsBaseSubmitEditorParameters submitEditorParameters = {
     Constants::COMMITMIMETYPE,
     Constants::COMMIT_ID,
     Constants::COMMIT_DISPLAY_NAME,
-    Constants::COMMIT_ID,
-    VcsBase::VcsBaseSubmitEditorParameters::DiffFiles
+    VcsBaseSubmitEditorParameters::DiffFiles
 };
 
 MercurialPlugin *MercurialPlugin::m_instance = 0;
@@ -139,8 +132,6 @@ MercurialPlugin::~MercurialPlugin()
 
 bool MercurialPlugin::initialize(const QStringList & /* arguments */, QString * /*errorMessage */)
 {
-    typedef VcsEditorFactory<MercurialEditor> MercurialEditorFactory;
-
     m_client = new MercurialClient(&mercurialSettings);
     initializeVcs(new MercurialControl(m_client));
 
@@ -153,10 +144,12 @@ bool MercurialPlugin::initialize(const QStringList & /* arguments */, QString * 
 
     static const char *describeSlot = SLOT(view(QString,QString));
     const int editorCount = sizeof(editorParameters)/sizeof(editorParameters[0]);
+    const auto widgetCreator = []() { return new MercurialEditorWidget; };
     for (int i = 0; i < editorCount; i++)
-        addAutoReleasedObject(new MercurialEditorFactory(editorParameters + i, m_client, describeSlot));
+        addAutoReleasedObject(new VcsEditorFactory(editorParameters + i, widgetCreator, m_client, describeSlot));
 
-    addAutoReleasedObject(new VcsSubmitEditorFactory<CommitEditor>(&submitEditorParameters));
+    addAutoReleasedObject(new VcsSubmitEditorFactory(&submitEditorParameters,
+        []() { return new CommitEditor(&submitEditorParameters); }));
 
     auto cloneWizardFactory = new BaseCheckoutWizardFactory;
     cloneWizardFactory->setId(QLatin1String(VcsBase::Constants::VCS_ID_MERCURIAL));
@@ -552,20 +545,19 @@ void MercurialPlugin::commit()
 
     m_submitRepository = state.topLevel();
 
-    connect(m_client, SIGNAL(parsedStatus(QList<VcsBase::VcsBaseClient::StatusItem>)),
-            this, SLOT(showCommitWidget(QList<VcsBase::VcsBaseClient::StatusItem>)));
+    connect(m_client, SIGNAL(parsedStatus(QList<VcsBaseClient::StatusItem>)),
+            this, SLOT(showCommitWidget(QList<VcsBaseClient::StatusItem>)));
     m_client->emitParsedStatus(m_submitRepository);
 }
 
 void MercurialPlugin::showCommitWidget(const QList<VcsBaseClient::StatusItem> &status)
 {
-    VcsBaseOutputWindow *outputWindow = VcsBaseOutputWindow::instance();
     //Once we receive our data release the connection so it can be reused elsewhere
-    disconnect(m_client, SIGNAL(parsedStatus(QList<VcsBase::VcsBaseClient::StatusItem>)),
-               this, SLOT(showCommitWidget(QList<VcsBase::VcsBaseClient::StatusItem>)));
+    disconnect(m_client, SIGNAL(parsedStatus(QList<VcsBaseClient::StatusItem>)),
+               this, SLOT(showCommitWidget(QList<VcsBaseClient::StatusItem>)));
 
     if (status.isEmpty()) {
-        outputWindow->appendError(tr("There are no changes to commit."));
+        VcsOutputWindow::appendError(tr("There are no changes to commit."));
         return;
     }
 
@@ -574,14 +566,14 @@ void MercurialPlugin::showCommitWidget(const QList<VcsBaseClient::StatusItem> &s
     // Keep the file alive, else it removes self and forgets its name
     saver.setAutoRemove(false);
     if (!saver.finalize()) {
-        VcsBase::VcsBaseOutputWindow::instance()->appendError(saver.errorString());
+        VcsOutputWindow::appendError(saver.errorString());
         return;
     }
 
     Core::IEditor *editor = Core::EditorManager::openEditor(saver.fileName(),
                                                             Constants::COMMIT_ID);
     if (!editor) {
-        outputWindow->appendError(tr("Unable to create an editor for the commit."));
+        VcsOutputWindow::appendError(tr("Unable to create an editor for the commit."));
         return;
     }
 
@@ -613,7 +605,8 @@ void MercurialPlugin::commitFromEditor()
 {
     // Close the submit editor
     m_submitActionTriggered = true;
-    Core::EditorManager::closeEditor(submitEditor());
+    QTC_ASSERT(submitEditor(), return);
+    Core::EditorManager::closeDocument(submitEditor()->document());
 }
 
 bool MercurialPlugin::submitEditorAboutToClose()
@@ -726,8 +719,7 @@ void MercurialPlugin::testDiffFileResolving_data()
 
 void MercurialPlugin::testDiffFileResolving()
 {
-    MercurialEditor editor(editorParameters + 2, 0);
-    editor.testDiffFileResolving();
+    VcsBaseEditorWidget::testDiffFileResolving(editorParameters[2].id);
 }
 
 void MercurialPlugin::testLogResolving()
@@ -747,12 +739,9 @@ void MercurialPlugin::testLogResolving()
                 "date:        Sat Jan 19 04:08:16 2013 +0100\n"
                 "summary:     test-rebase: add another test for rebase with multiple roots\n"
                 );
-    MercurialEditor editor(editorParameters, 0);
-    editor.testLogResolving(data, "18473:692cbda1eb50", "18472:37100f30590f");
+    VcsBaseEditorWidget::testLogResolving(editorParameters[0].id, data, "18473:692cbda1eb50", "18472:37100f30590f");
 }
 #endif
 
 } // namespace Internal
 } // namespace Mercurial
-
-Q_EXPORT_PLUGIN(MercurialPlugin)

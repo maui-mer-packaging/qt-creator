@@ -34,9 +34,12 @@
 #include "codeassist/assistenums.h"
 #include "texteditor_global.h"
 
+#include <texteditor/texteditoractionhandler.h>
+
 #include <coreplugin/textdocument.h>
 #include <coreplugin/editormanager/editormanager.h>
 #include <coreplugin/editormanager/ieditor.h>
+#include <coreplugin/editormanager/ieditorfactory.h>
 #include <coreplugin/find/ifindsupport.h>
 
 #include <utils/uncommentselection.h>
@@ -74,17 +77,21 @@ namespace Internal {
     class TextEditorOverlay;
 }
 
+class AutoCompleter;
+class BaseTextEditor;
+class BaseTextEditorFactory;
 class BaseTextEditorWidget;
-class FontSettings;
+class PlainTextEditorFactory;
+
 class BehaviorSettings;
 class CompletionSettings;
 class DisplaySettings;
-class MarginSettings;
-class TypingSettings;
-class StorageSettings;
-class Indenter;
-class AutoCompleter;
 class ExtraEncodingSettings;
+class FontSettings;
+class Indenter;
+class MarginSettings;
+class StorageSettings;
+class TypingSettings;
 
 class TEXTEDITOR_EXPORT BlockRange
 {
@@ -117,8 +124,10 @@ public:
         EndOfDoc = 5
     };
 
-    BaseTextEditor(BaseTextEditorWidget *editorWidget);
+    BaseTextEditor();
     ~BaseTextEditor();
+
+    virtual void finalizeInitialization() {}
 
     enum MarkRequestKind {
         BreakpointRequest,
@@ -129,7 +138,16 @@ public:
     static BaseTextEditor *currentTextEditor();
 
     BaseTextEditorWidget *editorWidget() const;
-    BaseTextDocument *textDocument();
+    BaseTextDocument *textDocument() const;
+
+    // Some convenience text access
+    QTextDocument *qdocument() const;
+    void setTextCursor(const QTextCursor &cursor);
+    QTextCursor textCursor() const;
+    QChar characterAt(int pos) const;
+    QString textAt(int from, int to) const;
+
+    void addContext(Core::Id id);
 
     // IEditor
     Core::IDocument *document();
@@ -175,21 +193,6 @@ public:
     /*! Selects text between current cursor position and \a toPos. */
     virtual void select(int toPos);
 
-    /*! Full access to comment definition, */
-    Utils::CommentDefinition &commentDefinition() const;
-    /*! Convenience style setter. */
-    void setCommentStyle(Utils::CommentDefinition::Style style);
-
-    CompletionAssistProvider *completionAssistProvider();
-    void setCompletionAssistProvider(CompletionAssistProvider *provider); // Not owned.
-
-    // FIXME: Only used to delay initialization from CppEditor.
-    // There should be something simpler.
-    void setCompletionAssistProvider(const std::function<CompletionAssistProvider *()> &provider);
-
-    void setAutoCompleter(AutoCompleter *autoCompleter);
-    AutoCompleter *autoCompleter() const;
-
 signals:
     void markRequested(TextEditor::BaseTextEditor *editor, int line, TextEditor::BaseTextEditor::MarkRequestKind kind);
     void markContextMenuRequested(TextEditor::BaseTextEditor *editor, int line, QMenu *menu);
@@ -199,8 +202,7 @@ signals:
     void contextHelpIdRequested(TextEditor::BaseTextEditor *editor, int position);
 
 private:
-    friend class Internal::BaseTextEditorWidgetPrivate;
-    friend class BaseTextEditorWidget;
+    friend class BaseTextEditorFactory;
     Internal::BaseTextEditorPrivate *d;
 };
 
@@ -212,11 +214,12 @@ class TEXTEDITOR_EXPORT BaseTextEditorWidget : public QPlainTextEdit
     Q_PROPERTY(int verticalBlockSelectionLastColumn READ verticalBlockSelectionLastColumn)
 
 public:
-    BaseTextEditorWidget(BaseTextDocument *doc, QWidget *parent);
-    BaseTextEditorWidget(BaseTextEditorWidget *other);
+    BaseTextEditorWidget(QWidget *parent = 0);
     ~BaseTextEditorWidget();
 
+    void setTextDocument(const BaseTextDocumentPtr &doc);
     BaseTextDocument *textDocument() const;
+    BaseTextDocumentPtr textDocumentPtr() const;
 
     // IEditor
     virtual bool open(QString *errorString, const QString &fileName, const QString &realFileName);
@@ -226,12 +229,16 @@ public:
     int position(BaseTextEditor::PositionOperation posOp = BaseTextEditor::Current,
          int at = -1) const;
     void convertPosition(int pos, int *line, int *column) const;
-
-    BaseTextEditor *editor() const;
+    using QPlainTextEdit::cursorRect;
+    QRect cursorRect(int pos) const;
+    void setCursorPosition(int pos);
 
     void print(QPrinter *);
 
     void appendStandardContextMenuActions(QMenu *menu);
+
+    void setAutoCompleter(AutoCompleter *autoCompleter);
+    AutoCompleter *autoCompleter() const;
 
     // Works only in conjunction with a syntax highlighter that puts
     // parentheses into text block user data
@@ -362,7 +369,6 @@ public:
     enum Side { Left, Right };
     void insertExtraToolBarWidget(Side side, QWidget *widget);
 
-public slots:
     virtual void copy();
     virtual void paste();
     virtual void cut();
@@ -371,19 +377,20 @@ public slots:
     virtual void format();
     virtual void rewrapParagraph();
     virtual void unCommentSelection();
+
     virtual void setDisplaySettings(const TextEditor::DisplaySettings &);
-    virtual void setMarginSettings(const TextEditor::MarginSettings &);
-    virtual void setBehaviorSettings(const TextEditor::BehaviorSettings &);
-    virtual void setTypingSettings(const TextEditor::TypingSettings &);
-    virtual void setStorageSettings(const TextEditor::StorageSettings &);
-    virtual void setCompletionSettings(const TextEditor::CompletionSettings &);
-    virtual void setExtraEncodingSettings(const TextEditor::ExtraEncodingSettings &);
+    void setMarginSettings(const TextEditor::MarginSettings &);
+    void setBehaviorSettings(const TextEditor::BehaviorSettings &);
+    void setTypingSettings(const TextEditor::TypingSettings &);
+    void setStorageSettings(const TextEditor::StorageSettings &);
+    void setCompletionSettings(const TextEditor::CompletionSettings &);
+    void setExtraEncodingSettings(const TextEditor::ExtraEncodingSettings &);
 
     void circularPaste();
     void switchUtf8bom();
 
-    void zoomIn(int range = 1);
-    void zoomOut(int range = 1);
+    void zoomIn();
+    void zoomOut();
     void zoomReset();
 
     void cutLine();
@@ -461,22 +468,21 @@ public slots:
     /// Abort code assistant if it is running.
     void abortAssist();
 
-    void acceptMissingSyntaxDefinitionInfo();
-
     void configureMimeType(const QString &mimeType);
     void configureMimeType(const Core::MimeType &mimeType);
-    void inSnippetMode(bool *active);
+
+    Q_INVOKABLE void inSnippetMode(bool *active); // Used by FakeVim.
+
+    void setCompletionAssistProvider(CompletionAssistProvider *provider);
+    virtual CompletionAssistProvider *completionAssistProvider() const;
 
 signals:
     void assistFinished();
     void readOnlyChanged();
-    void refactorMarkerClicked(const TextEditor::RefactorMarker &marker);
 
     void requestFontZoom(int zoom);
     void requestZoomReset();
     void requestBlockUpdate(const QTextBlock &);
-
-    void configured(Core::IEditor *editor);
 
 protected:
     bool event(QEvent *e);
@@ -512,11 +518,14 @@ protected:
     virtual bool replacementVisible(int blockNumber) const;
     virtual QColor replacementPenColor(int blockNumber) const;
 
-    virtual BaseTextEditor *createEditor();
     virtual void triggerPendingUpdates();
     virtual void applyFontSettings();
 
+    virtual void onRefactorMarkerClicked(const RefactorMarker &) {}
+
     void showDefaultContextMenu(QContextMenuEvent *e, Core::Id menuContextId);
+    virtual void finalizeInitialization() {}
+    virtual void finalizeInitializationAfterDuplication(BaseTextEditorWidget *) {}
 
 public:
     struct Link
@@ -549,6 +558,12 @@ public:
     QString selectedText() const;
 
     void setupAsPlainEditor();
+    void setupFallBackEditor(Core::Id id);
+
+    void remove(int length);
+    void replace(int length, const QString &string);
+    QChar characterAt(int pos) const;
+    QString textAt(int from, int to) const;
 
 protected:
     /*!
@@ -577,20 +592,75 @@ protected:
     int visibleFoldedBlockNumber() const;
 
 
+signals:
+    void markRequested(int line, TextEditor::BaseTextEditor::MarkRequestKind kind);
+    void markContextMenuRequested(int line, QMenu *menu);
+    void tooltipOverrideRequested(const QPoint &globalPos, int position, bool *handled);
+    void tooltipRequested(const QPoint &globalPos, int position);
+    void markTooltipRequested(const QPoint &globalPos, int line);
+    void activateEditor();
+    void clearContentsHelpId();
+
 protected slots:
     virtual void slotCursorPositionChanged(); // Used in VcsBase
     virtual void slotCodeStyleSettingsChanged(const QVariant &); // Used in CppEditor
 
-    void configureMimeType();
     void doFoo();
 
 private:
     Internal::BaseTextEditorWidgetPrivate *d;
-    Internal::BaseTextEditorPrivate *dd() const;
     friend class BaseTextEditor;
+    friend class BaseTextEditorFactory;
     friend class Internal::BaseTextEditorWidgetPrivate;
     friend class Internal::TextEditorOverlay;
     friend class RefactorOverlay;
+};
+
+class TEXTEDITOR_EXPORT BaseTextEditorFactory : public Core::IEditorFactory
+{
+    Q_OBJECT
+
+public:
+    BaseTextEditorFactory(QObject *parent = 0);
+
+    typedef std::function<BaseTextEditor *()> EditorCreator;
+    typedef std::function<BaseTextDocument *()> DocumentCreator;
+    typedef std::function<BaseTextEditorWidget *()> EditorWidgetCreator;
+    typedef std::function<SyntaxHighlighter *()> SyntaxHighLighterCreator;
+    typedef std::function<Indenter *()> IndenterCreator;
+    typedef std::function<AutoCompleter *()> AutoCompleterCreator;
+
+    void setDocumentCreator(const DocumentCreator &creator);
+    void setEditorWidgetCreator(const EditorWidgetCreator &creator);
+    void setEditorCreator(const EditorCreator &creator);
+    void setIndenterCreator(const IndenterCreator &creator);
+    void setSyntaxHighlighterCreator(const SyntaxHighLighterCreator &creator);
+    void setGenericSyntaxHighlighter(const QString &mimeType);
+    void setAutoCompleterCreator(const AutoCompleterCreator &creator);
+
+    void setEditorActionHandlers(Core::Id contextId, uint optionalActions);
+    void setEditorActionHandlers(uint optionalActions);
+
+    void setCommentStyle(Utils::CommentDefinition::Style style);
+    void setDuplicatedSupported(bool on);
+
+    Core::IEditor *createEditor();
+
+private:
+    friend class BaseTextEditor;
+    friend class PlainTextEditorFactory;
+
+    BaseTextEditor *createEditorHelper(const BaseTextDocumentPtr &doc);
+    BaseTextEditor *duplicateTextEditor(BaseTextEditor *);
+
+    DocumentCreator m_documentCreator;
+    EditorWidgetCreator m_widgetCreator;
+    EditorCreator m_editorCreator;
+    AutoCompleterCreator m_autoCompleterCreator;
+    IndenterCreator m_indenterCreator;
+    SyntaxHighLighterCreator m_syntaxHighlighterCreator;
+    Utils::CommentDefinition::Style m_commentStyle;
+    bool m_duplicatedSupported;
 };
 
 } // namespace TextEditor

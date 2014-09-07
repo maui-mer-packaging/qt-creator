@@ -37,7 +37,7 @@
 namespace ClangCodeModel {
 namespace Utils {
 
-ClangCodeModel::Internal::UnsavedFiles createUnsavedFiles(CppTools::CppModelManagerInterface::WorkingCopy workingCopy);
+ClangCodeModel::Internal::UnsavedFiles createUnsavedFiles(CppTools::WorkingCopy workingCopy);
 
 QStringList createClangOptions(const CppTools::ProjectPart::Ptr &pPart, CppTools::ProjectFile::Kind fileKind);
 QStringList createClangOptions(const CppTools::ProjectPart::Ptr &pPart, const QString &fileName = QString());

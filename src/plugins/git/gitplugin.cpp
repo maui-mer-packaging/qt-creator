@@ -58,6 +58,7 @@
 #include <coreplugin/infobar.h>
 #include <coreplugin/editormanager/editormanager.h>
 #include <coreplugin/editormanager/ieditor.h>
+#include <coreplugin/locator/commandlocator.h>
 #include <coreplugin/mimedatabase.h>
 #include <coreplugin/vcsmanager.h>
 #include <coreplugin/coreconstants.h>
@@ -70,9 +71,8 @@
 #include <vcsbase/vcsbaseeditor.h>
 #include <vcsbase/vcsbaseconstants.h>
 #include <vcsbase/basevcssubmiteditorfactory.h>
-#include <vcsbase/vcsbaseoutputwindow.h>
+#include <vcsbase/vcsoutputwindow.h>
 #include <vcsbase/cleandialog.h>
-#include <coreplugin/locator/commandlocator.h>
 
 #include <QDebug>
 #include <QDir>
@@ -106,27 +106,22 @@ const VcsBaseEditorParameters editorParameters[] = {
     VcsBase::OtherContent,
     Git::Constants::GIT_COMMAND_LOG_EDITOR_ID,
     Git::Constants::GIT_COMMAND_LOG_EDITOR_DISPLAY_NAME,
-    Git::Constants::C_GIT_COMMAND_LOG_EDITOR,
     "text/vnd.qtcreator.git.commandlog"},
 {   VcsBase::LogOutput,
     Git::Constants::GIT_LOG_EDITOR_ID,
     Git::Constants::GIT_LOG_EDITOR_DISPLAY_NAME,
-    Git::Constants::C_GIT_LOG_EDITOR,
     "text/vnd.qtcreator.git.log"},
 {   VcsBase::AnnotateOutput,
     Git::Constants::GIT_BLAME_EDITOR_ID,
     Git::Constants::GIT_BLAME_EDITOR_DISPLAY_NAME,
-    Git::Constants::C_GIT_BLAME_EDITOR,
     "text/vnd.qtcreator.git.annotation"},
 {   VcsBase::OtherContent,
     Git::Constants::GIT_COMMIT_TEXT_EDITOR_ID,
     Git::Constants::GIT_COMMIT_TEXT_EDITOR_DISPLAY_NAME,
-    Git::Constants::C_GIT_COMMIT_TEXT_EDITOR,
     "text/vnd.qtcreator.git.commit"},
 {   VcsBase::OtherContent,
     Git::Constants::GIT_REBASE_EDITOR_ID,
     Git::Constants::GIT_REBASE_EDITOR_DISPLAY_NAME,
-    Git::Constants::C_GIT_REBASE_EDITOR,
     "text/vnd.qtcreator.git.rebase"},
 };
 
@@ -181,7 +176,6 @@ const VcsBaseSubmitEditorParameters submitParameters = {
     Git::Constants::SUBMIT_MIMETYPE,
     Git::Constants::GITSUBMITEDITOR_ID,
     Git::Constants::GITSUBMITEDITOR_DISPLAY_NAME,
-    Git::Constants::C_GITSUBMITEDITOR,
     VcsBaseSubmitEditorParameters::DiffRows
 };
 
@@ -280,9 +274,6 @@ bool GitPlugin::initialize(const QStringList &arguments, QString *errorMessage)
 
     m_gitClient = new GitClient(&m_settings);
 
-    typedef VcsEditorFactory<GitEditorWidget> GitEditorFactory;
-    typedef VcsSubmitEditorFactory<GitSubmitEditor> GitSubmitEditorFactory;
-
     initializeVcs(new GitVersionControl(m_gitClient));
 
     // Create the globalcontext list to register actions accordingly
@@ -293,10 +284,12 @@ bool GitPlugin::initialize(const QStringList &arguments, QString *errorMessage)
 
     static const char *describeSlot = SLOT(show(QString,QString));
     const int editorCount = sizeof(editorParameters) / sizeof(editorParameters[0]);
+    const auto widgetCreator = []() { return new GitEditorWidget; };
     for (int i = 0; i < editorCount; i++)
-        addAutoReleasedObject(new GitEditorFactory(editorParameters + i, m_gitClient, describeSlot));
+        addAutoReleasedObject(new VcsEditorFactory(editorParameters + i, widgetCreator, m_gitClient, describeSlot));
 
-    addAutoReleasedObject(new GitSubmitEditorFactory(&submitParameters));
+    addAutoReleasedObject(new VcsSubmitEditorFactory(&submitParameters,
+        []() { return new GitSubmitEditor(&submitParameters); }));
 
     auto cloneWizardFactory = new VcsBase::BaseCheckoutWizardFactory;
     cloneWizardFactory->setId(QLatin1String(VcsBase::Constants::VCS_ID_GIT));
@@ -411,8 +404,8 @@ bool GitPlugin::initialize(const QStringList &arguments, QString *errorMessage)
     localRepositoryMenu->addSeparator(globalcontext);
 
     createRepositoryAction(localRepositoryMenu, tr("Commit..."), "Git.Commit",
-                           globalcontext, true, SLOT(startCommit()));
-                           QKeySequence(UseMacShortcuts ? tr("Meta+G,Meta+C") : tr("Alt+G,Alt+C"));
+                           globalcontext, true, SLOT(startCommit()),
+                           QKeySequence(UseMacShortcuts ? tr("Meta+G,Meta+C") : tr("Alt+G,Alt+C")));
 
     createRepositoryAction(localRepositoryMenu,
                            tr("Amend Last Commit..."), "Git.AmendCommit",
@@ -645,7 +638,7 @@ bool GitPlugin::initialize(const QStringList &arguments, QString *errorMessage)
     gitContainer->addAction(createRepositoryCommand);
 
     // Submit editor
-    Context submitContext(Constants::C_GITSUBMITEDITOR);
+    Context submitContext(Constants::GITSUBMITEDITOR_ID);
     m_submitCurrentAction = new QAction(VcsBaseSubmitEditor::submitIcon(), tr("Commit"), this);
     Core::Command *command = ActionManager::registerAction(m_submitCurrentAction, Constants::SUBMIT_CURRENT, submitContext);
     command->setAttribute(Core::Command::CA_UpdateText);
@@ -726,7 +719,7 @@ void GitPlugin::blameFile()
 {
     const VcsBasePluginState state = currentState();
     QTC_ASSERT(state.hasFile(), return);
-    const int lineNumber = VcsBaseEditorWidget::lineNumberOfCurrentEditor(state.currentFile());
+    const int lineNumber = VcsBaseEditor::lineNumberOfCurrentEditor(state.currentFile());
     m_gitClient->blame(state.currentFileTopLevel(), QStringList(), state.relativeCurrentFile(), QString(), lineNumber);
 }
 
@@ -950,7 +943,7 @@ void GitPlugin::startCommit(CommitType commitType)
     if (raiseSubmitEditor())
         return;
     if (isCommitEditorOpen()) {
-        VcsBaseOutputWindow::instance()->appendWarning(tr("Another submit is currently being executed."));
+        VcsOutputWindow::appendWarning(tr("Another submit is currently being executed."));
         return;
     }
 
@@ -960,7 +953,7 @@ void GitPlugin::startCommit(CommitType commitType)
     QString errorMessage, commitTemplate;
     CommitData data(commitType);
     if (!m_gitClient->getCommitData(state.topLevel(), &commitTemplate, data, &errorMessage)) {
-        VcsBaseOutputWindow::instance()->appendError(errorMessage);
+        VcsOutputWindow::appendError(errorMessage);
         return;
     }
 
@@ -974,7 +967,7 @@ void GitPlugin::startCommit(CommitType commitType)
     saver.setAutoRemove(false);
     saver.write(commitTemplate.toLocal8Bit());
     if (!saver.finalize()) {
-        VcsBaseOutputWindow::instance()->appendError(saver.errorString());
+        VcsOutputWindow::appendError(saver.errorString());
         return;
     }
     m_commitMessageFileName = saver.fileName();
@@ -1034,7 +1027,8 @@ void GitPlugin::submitCurrentLog()
 {
     // Close the submit editor
     m_submitActionTriggered = true;
-    EditorManager::closeEditor(submitEditor());
+    QTC_ASSERT(submitEditor(), return);
+    EditorManager::closeDocument(submitEditor()->document());
 }
 
 bool GitPlugin::submitEditorAboutToClose()
@@ -1260,15 +1254,14 @@ void GitPlugin::applyPatch(const QString &workingDirectory, QString file)
         }
     }
     // Run!
-    VcsBaseOutputWindow *outwin = VcsBaseOutputWindow::instance();
     QString errorMessage;
     if (m_gitClient->synchronousApplyPatch(workingDirectory, file, &errorMessage)) {
         if (errorMessage.isEmpty())
-            outwin->appendMessage(tr("Patch %1 successfully applied to %2").arg(file, workingDirectory));
+            VcsOutputWindow::appendMessage(tr("Patch %1 successfully applied to %2").arg(file, workingDirectory));
         else
-            outwin->appendError(errorMessage);
+            VcsOutputWindow::appendError(errorMessage);
     } else {
-        outwin->appendError(errorMessage);
+        VcsOutputWindow::appendError(errorMessage);
     }
     m_gitClient->endStashScope(workingDirectory);
 }
@@ -1523,8 +1516,7 @@ void GitPlugin::testDiffFileResolving_data()
 
 void GitPlugin::testDiffFileResolving()
 {
-    GitEditorWidget editor(editorParameters + 3, 0);
-    editor.testDiffFileResolving();
+    VcsBaseEditorWidget::testDiffFileResolving(editorParameters[3].id);
 }
 
 void GitPlugin::testLogResolving()
@@ -1549,8 +1541,8 @@ void GitPlugin::testLogResolving()
                 "    \n"
                 "    Signed-off-by: Junio C Hamano <gitster@pobox.com>\n"
                 );
-    GitEditorWidget editor(editorParameters + 1, 0);
-    editor.testLogResolving(data,
+
+    VcsBaseEditorWidget::testLogResolving(editorParameters[1].id, data,
                             "50a6b54c - Merge branch 'for-junio' of git://bogomips.org/git-svn",
                             "3587b513 - Update draft release notes to 1.8.2");
 }
@@ -1579,5 +1571,3 @@ void GitPlugin::testCloneWizard_directoryFromRepository_data()
 
 } // namespace Internal
 } // namespace Git
-
-Q_EXPORT_PLUGIN(GitPlugin)

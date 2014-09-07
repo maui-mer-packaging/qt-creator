@@ -39,7 +39,10 @@
 #include <QStringList>
 #include <QVariantMap>
 
-namespace Utils { class Environment; }
+namespace Utils {
+class Environment;
+class AbstractMacroExpander;
+} // namespace Utils
 
 namespace Core { class FeatureSet; }
 
@@ -96,7 +99,8 @@ public:
     QString autodetectionSource() const;
 
     QString displayName() const;
-    void setDisplayName(const QString &name);
+    QString unexpandedDisplayName() const;
+    void setUnexpandedDisplayName(const QString &name);
 
     // All valid Ids are >= 0
     int uniqueId() const;
@@ -107,8 +111,6 @@ public:
     virtual bool isValid() const;
     virtual QString invalidReason() const;
     virtual QStringList warningReason() const;
-
-    virtual ProjectExplorer::ToolChain *preferredToolChain(const Utils::FileName &ms) const;
 
     virtual QString description() const = 0;
     virtual QString toHtml(bool verbose) const;
@@ -196,8 +198,7 @@ public:
 
     virtual QtConfigWidget *createConfigurationWidget() const;
 
-    static QString defaultDisplayName(const QString &versionString,
-                                      const Utils::FileName &qmakePath,
+    static QString defaultUnexpandedDisplayName(const Utils::FileName &qmakePath,
                                       bool fromPath = false);
 
     virtual Core::FeatureSet availableFeatures() const;
@@ -224,9 +225,12 @@ public:
     QStringList configValues() const;
     QStringList qtConfigValues() const;
 
+    Utils::AbstractMacroExpander *macroExpander() const; // owned by the Qt version
+
 protected:
     BaseQtVersion();
     BaseQtVersion(const Utils::FileName &path, bool isAutodetected = false, const QString &autodetectionSource = QString());
+    BaseQtVersion(const BaseQtVersion &other);
 
     static QString qmakeProperty(const QHash<QString,QString> &versionInfo, const QByteArray &name,
                                  PropertyVariant variant = PropertyVariantGet);
@@ -240,6 +244,11 @@ protected:
 
     void ensureMkSpecParsed() const;
     virtual void parseMkSpec(ProFileEvaluator *) const;
+
+    // Create the macro expander. This pointer will be cached by the Qt version (which will take
+    // ownership).
+    virtual Utils::AbstractMacroExpander *createMacroExpander() const;
+
 private:
     void setAutoDetectionSource(const QString &autodetectionSource);
     static int getUniqueId();
@@ -272,7 +281,7 @@ private:
     mutable QStringList m_configValues;
     mutable QStringList m_qtConfigValues;
 
-    QString m_displayName;
+    QString m_unexpandedDisplayName;
     QString m_autodetectionSource;
     mutable Utils::FileName m_sourcePath;
 
@@ -292,6 +301,8 @@ private:
     mutable QString m_qmlviewerCommand;
 
     mutable QList<ProjectExplorer::Abi> m_qtAbis;
+
+    mutable Utils::AbstractMacroExpander *m_expander;
 };
 }
 

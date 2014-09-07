@@ -38,15 +38,15 @@ namespace Core { class IEditor; }
 
 namespace TextEditor { class BaseTextEditor; }
 
-namespace GLSLEditor {
+namespace GlslEditor {
 namespace Internal {
 
-class GLSLHoverHandler : public TextEditor::BaseHoverHandler
+class GlslHoverHandler : public TextEditor::BaseHoverHandler
 {
     Q_OBJECT
 public:
-    GLSLHoverHandler(QObject *parent = 0);
-    virtual ~GLSLHoverHandler();
+    GlslHoverHandler(QObject *parent = 0);
+    virtual ~GlslHoverHandler();
 
 private:
     virtual bool acceptEditor(Core::IEditor *editor);
@@ -55,6 +55,6 @@ private:
 };
 
 } // namespace Internal
-} // namespace GLSLEditor
+} // namespace GlslEditor
 
 #endif // GLSLHOVERHANDLER_H

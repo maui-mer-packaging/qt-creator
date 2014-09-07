@@ -228,7 +228,7 @@ DocumentManager::~DocumentManager()
     delete d;
 }
 
-QObject *DocumentManager::instance()
+DocumentManager *DocumentManager::instance()
 {
     return m_instance;
 }
@@ -679,8 +679,8 @@ QString DocumentManager::getSaveFileName(const QString &title, const QString &pa
                 // Mime database creates filter strings like this: Anything here (*.foo *.bar)
                 QRegExp regExp(QLatin1String(".*\\s+\\((.*)\\)$"));
                 const int index = regExp.lastIndexIn(*selectedFilter);
-                bool suffixOk = false;
                 if (index != -1) {
+                    bool suffixOk = false;
                     const QStringList &suffixes = regExp.cap(1).remove(QLatin1Char('*')).split(QLatin1Char(' '));
                     foreach (const QString &suffix, suffixes)
                         if (fileName.endsWith(suffix)) {
@@ -1113,7 +1113,7 @@ void DocumentManager::checkForReload()
     }
     if (!errorStrings.isEmpty())
         QMessageBox::critical(ICore::dialogParent(), tr("File Error"),
-                              errorStrings.join(QLatin1String("\n")));
+                              errorStrings.join(QLatin1Char('\n')));
 
     // handle deleted files
     EditorManager::closeDocuments(documentsToClose, false);

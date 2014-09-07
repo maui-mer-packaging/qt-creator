@@ -32,92 +32,20 @@
 
 #include <texteditor/basetexteditor.h>
 
-#include <QSharedPointer>
-#include <QSet>
-
-QT_BEGIN_NAMESPACE
-class QComboBox;
-class QTimer;
-QT_END_NAMESPACE
-
-namespace GLSL {
-class Engine;
-class TranslationUnitAST;
-class Scope;
-} // namespace GLSL
-
-namespace GLSLEditor {
+namespace GlslEditor {
 namespace Internal {
 
-class GlslEditor;
-class GlslEditorWidget;
+int languageVariant(const QString &mimeType);
 
-class Document
-{
-public:
-    typedef QSharedPointer<Document> Ptr;
-
-    Document();
-    ~Document();
-
-    GLSL::Engine *engine() const { return _engine; }
-    GLSL::TranslationUnitAST *ast() const { return _ast; }
-    GLSL::Scope *globalScope() const { return _globalScope; }
-
-    GLSL::Scope *scopeAt(int position) const;
-    void addRange(const QTextCursor &cursor, GLSL::Scope *scope);
-
-private:
-    struct Range {
-        QTextCursor cursor;
-        GLSL::Scope *scope;
-    };
-
-    GLSL::Engine *_engine;
-    GLSL::TranslationUnitAST *_ast;
-    GLSL::Scope *_globalScope;
-    QList<Range> _cursors;
-
-    friend class GlslEditorWidget;
-};
-
-class GlslEditorWidget : public TextEditor::BaseTextEditorWidget
+class GlslEditorFactory : public TextEditor::BaseTextEditorFactory
 {
     Q_OBJECT
 
 public:
-    GlslEditorWidget(TextEditor::BaseTextDocument *doc, QWidget *parent);
-    GlslEditorWidget(GlslEditorWidget *other);
-
-    int editorRevision() const;
-    bool isOutdated() const;
-
-    QSet<QString> identifiers() const;
-
-    static int languageVariant(const QString &mimeType);
-
-    TextEditor::IAssistInterface *createAssistInterface(TextEditor::AssistKind assistKind,
-                                                        TextEditor::AssistReason reason) const;
-
-private slots:
-    void updateDocument();
-    void updateDocumentNow();
-
-protected:
-    TextEditor::BaseTextEditor *createEditor();
-
-private:
-    GlslEditorWidget(TextEditor::BaseTextEditorWidget *); // avoid stupidity
-    void ctor();
-    void setSelectedElements();
-    QString wordUnderCursor() const;
-
-    QTimer *m_updateDocumentTimer;
-    QComboBox *m_outlineCombo;
-    Document::Ptr m_glslDocument;
+    GlslEditorFactory();
 };
 
 } // namespace Internal
-} // namespace GLSLEditor
+} // namespace GlslEditor
 
 #endif // GLSLEDITOR_H

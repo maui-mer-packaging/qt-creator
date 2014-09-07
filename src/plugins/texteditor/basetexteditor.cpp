@@ -49,6 +49,7 @@
 #include "circularclipboardassist.h"
 #include "highlighterutils.h"
 #include "basetexteditor.h"
+
 #include <texteditor/codeassist/codeassistant.h>
 #include <texteditor/codeassist/defaultassistinterface.h>
 #include <texteditor/generichighlighter/context.h>
@@ -74,30 +75,30 @@
 #include <utils/tooltip/tipcontents.h>
 #include <utils/uncommentselection.h>
 
-#include <QCoreApplication>
-#include <QTextCodec>
-#include <QDebug>
-#include <QTime>
-#include <QTimer>
-#include <QTimeLine>
-#include <QMimeData>
 #include <QAbstractTextDocumentLayout>
 #include <QApplication>
+#include <QClipboard>
+#include <QCoreApplication>
+#include <QDebug>
 #include <QKeyEvent>
+#include <QMenu>
+#include <QMessageBox>
+#include <QMimeData>
 #include <QPainter>
-#include <QPrinter>
 #include <QPrintDialog>
+#include <QPrinter>
 #include <QScrollBar>
 #include <QShortcut>
 #include <QStyle>
+#include <QTextBlock>
+#include <QTextCodec>
 #include <QTextCursor>
 #include <QTextDocumentFragment>
-#include <QTextBlock>
 #include <QTextLayout>
+#include <QTime>
+#include <QTimeLine>
+#include <QTimer>
 #include <QToolBar>
-#include <QMenu>
-#include <QMessageBox>
-#include <QClipboard>
 
 //#define DO_FOO
 
@@ -170,12 +171,10 @@ public:
 signals:
     void updateRequest(int position, QPointF lastPos, QRectF rect);
 
-
-private slots:
+private:
     void step(qreal v);
 
-private:
-    QTimeLine *m_timeline;
+    QTimeLine m_timeline;
     qreal m_value;
     int m_position;
     QPointF m_lastDrawPos;
@@ -185,29 +184,63 @@ private:
     QSizeF m_size;
 };
 
+class TextEditExtraArea : public QWidget
+{
+public:
+    TextEditExtraArea(BaseTextEditorWidget *edit)
+        : QWidget(edit)
+    {
+        textEdit = edit;
+        setAutoFillBackground(true);
+    }
+
+protected:
+    QSize sizeHint() const {
+        return QSize(textEdit->extraAreaWidth(), 0);
+    }
+    void paintEvent(QPaintEvent *event) {
+        textEdit->extraAreaPaintEvent(event);
+    }
+    void mousePressEvent(QMouseEvent *event) {
+        textEdit->extraAreaMouseEvent(event);
+    }
+    void mouseMoveEvent(QMouseEvent *event) {
+        textEdit->extraAreaMouseEvent(event);
+    }
+    void mouseReleaseEvent(QMouseEvent *event) {
+        textEdit->extraAreaMouseEvent(event);
+    }
+    void leaveEvent(QEvent *event) {
+        textEdit->extraAreaLeaveEvent(event);
+    }
+    void contextMenuEvent(QContextMenuEvent *event) {
+        textEdit->extraAreaContextMenuEvent(event);
+    }
+
+    void wheelEvent(QWheelEvent *event) {
+        QCoreApplication::sendEvent(textEdit->viewport(), event);
+    }
+
+private:
+    BaseTextEditorWidget *textEdit;
+};
+
 class BaseTextEditorPrivate
 {
 public:
-    BaseTextEditorPrivate()
-        : m_autoCompleter(new AutoCompleter)
-    {}
+    BaseTextEditorPrivate() {}
 
-    // Note: This is always a copy of IContext::m_widget.
-    BaseTextEditorWidget *m_editorWidget;
-
-    CommentDefinition m_commentDefinition;
-    std::function<CompletionAssistProvider *()> m_completionAssistProvider;
-    QScopedPointer<AutoCompleter> m_autoCompleter;
+    QPointer<BaseTextEditorFactory> m_origin;
 };
 
 class BaseTextEditorWidgetPrivate : public QObject
 {
 public:
     BaseTextEditorWidgetPrivate(BaseTextEditorWidget *parent);
-    ~BaseTextEditorWidgetPrivate() { delete m_toolBar; }
-
-    // FIXME: Remove after relevant members have been moved to BaseTextEditorPrivate
-    BaseTextEditorPrivate *dd() { return q->editor()->d; }
+    ~BaseTextEditorWidgetPrivate()
+    {
+        delete m_toolBar;
+    }
 
     void setupDocumentSignals();
     void updateLineSelectionColor();
@@ -256,7 +289,6 @@ public:
     bool inFindScope(const QTextCursor &cursor);
     bool inFindScope(int selectionStart, int selectionEnd);
 
-//public slots:
     void slotUpdateExtraAreaWidth();
     void slotUpdateRequest(const QRect &r, int dy);
     void slotUpdateBlockNotify(const QTextBlock &);
@@ -266,7 +298,7 @@ public:
     void editorContentsChange(int position, int charsRemoved, int charsAdded);
     void documentAboutToBeReloaded();
     void documentReloadFinished(bool success);
-    void highlightSearchResultsSlot(const QString &txt, Core::FindFlags findFlags);
+    void highlightSearchResultsSlot(const QString &txt, FindFlags findFlags);
     void setFindScope(const QTextCursor &start, const QTextCursor &end, int, int);
 
     void updateCursorPosition();
@@ -282,8 +314,8 @@ public:
     BaseTextEditorWidget *q;
     QToolBar *m_toolBar;
     QWidget *m_stretchWidget;
-    Utils::LineColumnLabel *m_cursorPositionLabel;
-    Utils::LineColumnLabel *m_fileEncodingLabel;
+    LineColumnLabel *m_cursorPositionLabel;
+    LineColumnLabel *m_fileEncodingLabel;
     QAction *m_cursorPositionLabelAction;
     QAction *m_fileEncodingLabelAction;
 
@@ -304,7 +336,7 @@ public:
 
     QWidget *m_extraArea;
 
-    Core::Id m_tabSettingsId;
+    Id m_tabSettingsId;
     ICodeStylePreferences *m_codeStylePreferences;
     DisplaySettings m_displaySettings;
     MarginSettings m_marginSettings;
@@ -348,11 +380,9 @@ public:
     bool m_linkPressed;
 
     QRegExp m_searchExpr;
-    Core::FindFlags m_findFlags;
+    FindFlags m_findFlags;
     void highlightSearchResults(const QTextBlock &block, TextEditorOverlay *overlay);
     QTimer m_delayedUpdateTimer;
-
-    BaseTextEditor *m_editor;
 
     QList<QTextEdit::ExtraSelection> m_extraSelections[BaseTextEditorWidget::NExtraSelectionKinds];
 
@@ -387,7 +417,7 @@ public:
     BaseTextEditorPrivateHighlightBlocks m_highlightBlocksInfo;
     QTimer m_highlightBlocksTimer;
 
-    QScopedPointer<CodeAssistant> m_codeAssistant;
+    CodeAssistant m_codeAssistant;
     bool m_assistRelevantContentAdded;
 
     QPointer<BaseTextEditorAnimator> m_animator;
@@ -400,6 +430,10 @@ public:
     QScopedPointer<Internal::ClipboardAssistProvider> m_clipboardAssistProvider;
 
     bool m_isMissingSyntaxDefinition;
+
+    QScopedPointer<AutoCompleter> m_autoCompleter;
+    CommentDefinition m_commentDefinition;
+    CompletionAssistProvider *m_completionAssistProvider;
 };
 
 BaseTextEditorWidgetPrivate::BaseTextEditorWidgetPrivate(BaseTextEditorWidget *parent)
@@ -440,28 +474,31 @@ BaseTextEditorWidgetPrivate::BaseTextEditorWidgetPrivate(BaseTextEditorWidget *p
     m_visibleWrapColumn(0),
     m_linkPressed(false),
     m_delayedUpdateTimer(0),
-    m_editor(0),
     m_inBlockSelectionMode(false),
     m_moveLineUndoHack(false),
     m_findScopeVerticalBlockSelectionFirstColumn(-1),
     m_findScopeVerticalBlockSelectionLastColumn(-1),
     m_highlightBlocksTimer(0),
-    m_codeAssistant(new CodeAssistant),
     m_assistRelevantContentAdded(false),
     m_cursorBlockNumber(-1),
     m_blockCount(0),
     m_markDragging(false),
     m_clipboardAssistProvider(new Internal::ClipboardAssistProvider),
-    m_isMissingSyntaxDefinition(false)
+    m_isMissingSyntaxDefinition(false),
+    m_autoCompleter(new AutoCompleter),
+    m_completionAssistProvider(0)
 {
     Aggregation::Aggregate *aggregate = new Aggregation::Aggregate;
     BaseTextFind *baseTextFind = new BaseTextFind(q);
-    connect(baseTextFind, &BaseTextFind::highlightAll,
+    connect(baseTextFind, &BaseTextFind::highlightAllRequested,
             this, &BaseTextEditorWidgetPrivate::highlightSearchResultsSlot);
     connect(baseTextFind, &BaseTextFind::findScopeChanged,
             this, &BaseTextEditorWidgetPrivate::setFindScope);
     aggregate->add(baseTextFind);
     aggregate->add(q);
+
+    m_extraArea = new TextEditExtraArea(q);
+    m_extraArea->setMouseTracking(true);
 
     m_stretchWidget = new QWidget;
     m_stretchWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
@@ -469,69 +506,45 @@ BaseTextEditorWidgetPrivate::BaseTextEditorWidgetPrivate(BaseTextEditorWidget *p
     m_toolBar->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Minimum);
     m_toolBar->addWidget(m_stretchWidget);
 
-    m_cursorPositionLabel = new Utils::LineColumnLabel;
+    m_cursorPositionLabel = new LineColumnLabel;
     const int spacing = q->style()->pixelMetric(QStyle::PM_LayoutHorizontalSpacing) / 2;
     m_cursorPositionLabel->setContentsMargins(spacing, 0, spacing, 0);
 
-    m_fileEncodingLabel = new Utils::LineColumnLabel;
+    m_fileEncodingLabel = new LineColumnLabel;
     m_fileEncodingLabel->setContentsMargins(spacing, 0, spacing, 0);
 
     m_cursorPositionLabelAction = m_toolBar->addWidget(m_cursorPositionLabel);
     m_fileEncodingLabelAction = m_toolBar->addWidget(m_fileEncodingLabel);
-
-    connect(m_cursorPositionLabel, &LineColumnLabel::clicked, [this] {
-        Core::EditorManager::activateEditor(q->editor(), Core::EditorManager::IgnoreNavigationHistory);
-        if (Core::Command *cmd = Core::ActionManager::command(Core::Constants::GOTO)) {
-            if (QAction *act = cmd->action())
-                act->trigger();
-        }
-    });
 }
-
-class TextEditExtraArea : public QWidget
-{
-public:
-    TextEditExtraArea(BaseTextEditorWidget *edit)
-        : QWidget(edit)
-    {
-        textEdit = edit;
-        setAutoFillBackground(true);
-    }
-
-protected:
-    QSize sizeHint() const {
-        return QSize(textEdit->extraAreaWidth(), 0);
-    }
-    void paintEvent(QPaintEvent *event) {
-        textEdit->extraAreaPaintEvent(event);
-    }
-    void mousePressEvent(QMouseEvent *event) {
-        textEdit->extraAreaMouseEvent(event);
-    }
-    void mouseMoveEvent(QMouseEvent *event) {
-        textEdit->extraAreaMouseEvent(event);
-    }
-    void mouseReleaseEvent(QMouseEvent *event) {
-        textEdit->extraAreaMouseEvent(event);
-    }
-    void leaveEvent(QEvent *event) {
-        textEdit->extraAreaLeaveEvent(event);
-    }
-    void contextMenuEvent(QContextMenuEvent *event) {
-        textEdit->extraAreaContextMenuEvent(event);
-    }
-
-    void wheelEvent(QWheelEvent *event) {
-        QCoreApplication::sendEvent(textEdit->viewport(), event);
-    }
-
-private:
-    BaseTextEditorWidget *textEdit;
-};
 
 } // namespace Internal
 
 using namespace Internal;
+
+/*!
+ * Test if syntax highlighter is available (or unneeded) for \a widget.
+ * If not found, show a warning with a link to the relevant settings page.
+ */
+static void updateEditorInfoBar(BaseTextEditorWidget *widget)
+{
+    Id infoSyntaxDefinition(Constants::INFO_SYNTAX_DEFINITION);
+    InfoBar *infoBar = widget->textDocument()->infoBar();
+    if (!widget->isMissingSyntaxDefinition()) {
+        infoBar->removeInfo(infoSyntaxDefinition);
+    } else if (infoBar->canInfoBeAdded(infoSyntaxDefinition)) {
+        InfoBarEntry info(infoSyntaxDefinition,
+                          BaseTextEditor::tr("A highlight definition was not found for this file. "
+                                             "Would you like to try to find one?"),
+                          InfoBarEntry::GlobalSuppressionEnabled);
+        info.setCustomButtonInfo(BaseTextEditor::tr("Show Highlighter Options..."), [widget]() {
+            ICore::showOptionsDialog(Constants::TEXT_EDITOR_SETTINGS_CATEGORY,
+                                     Constants::TEXT_EDITOR_HIGHLIGHTER_SETTINGS,
+                                     widget);
+        });
+
+        infoBar->addInfo(info);
+    }
+}
 
 QString BaseTextEditorWidget::plainTextFromSelection(const QTextCursor &cursor) const
 {
@@ -566,23 +579,22 @@ QString BaseTextEditorWidget::convertToPlainText(const QString &txt)
 
 static const char kTextBlockMimeType[] = "application/vnd.qtcreator.blocktext";
 
-BaseTextEditorWidget::BaseTextEditorWidget(BaseTextDocument *doc, QWidget *parent)
+BaseTextEditorWidget::BaseTextEditorWidget(QWidget *parent)
     : QPlainTextEdit(parent)
 {
+    // "Needed", as the creation below triggers ChildEvents that are
+    // passed to this object's event() which uses 'd'.
+    d = 0;
     d = new BaseTextEditorWidgetPrivate(this);
-    d->ctor(QSharedPointer<BaseTextDocument>(doc));
 }
 
-BaseTextEditorWidget::BaseTextEditorWidget(BaseTextEditorWidget *other)
+void BaseTextEditorWidget::setTextDocument(const QSharedPointer<BaseTextDocument> &doc)
 {
-    d = new BaseTextEditorWidgetPrivate(this);
-    d->ctor(other->d->m_document);
+    d->ctor(doc);
 }
 
 void BaseTextEditorWidgetPrivate::ctor(const QSharedPointer<BaseTextDocument> &doc)
 {
-    m_extraArea = new TextEditExtraArea(q);
-    m_extraArea->setMouseTracking(true);
     q->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
 
     m_overlay = new TextEditorOverlay(q);
@@ -604,13 +616,13 @@ void BaseTextEditorWidgetPrivate::ctor(const QSharedPointer<BaseTextDocument> &d
     visibleFoldedBlockNumber = -1;
     suggestedVisibleFoldedBlockNumber = -1;
 
-    QObject::connect(m_codeAssistant.data(), &CodeAssistant::finished,
+    QObject::connect(&m_codeAssistant, &CodeAssistant::finished,
                      q, &BaseTextEditorWidget::assistFinished);
 
     QObject::connect(q, &QPlainTextEdit::blockCountChanged,
                      this, &BaseTextEditorWidgetPrivate::slotUpdateExtraAreaWidth);
 
-    QObject::connect(q, &BaseTextEditorWidget::modificationChanged, m_extraArea,
+    QObject::connect(q, &QPlainTextEdit::modificationChanged, m_extraArea,
                      static_cast<void (QWidget::*)()>(&QWidget::update));
 
     QObject::connect(q, &QPlainTextEdit::cursorPositionChanged,
@@ -873,16 +885,6 @@ int BaseTextEditorWidgetPrivate::visualIndent(const QTextBlock &block) const
     return 0;
 }
 
-BaseTextEditor *BaseTextEditorWidget::editor() const
-{
-    if (!d->m_editor) {
-        d->m_editor = const_cast<BaseTextEditorWidget *>(this)->createEditor();
-        d->m_codeAssistant->configure(d->m_editor);
-    }
-    return d->m_editor;
-}
-
-
 void BaseTextEditorWidget::selectEncoding()
 {
     BaseTextDocument *doc = d->m_document.data();
@@ -898,7 +900,7 @@ void BaseTextEditorWidget::selectEncoding()
         break; }
     case CodecSelector::Save:
         doc->setCodec(codecSelector.selectedCodec());
-        Core::EditorManager::saveDocument(textDocument());
+        EditorManager::saveDocument(textDocument());
         updateTextCodecLabel();
         break;
     case CodecSelector::Cancel:
@@ -937,15 +939,15 @@ QString BaseTextEditorWidget::selectedText() const
 void BaseTextEditorWidgetPrivate::updateCannotDecodeInfo()
 {
     q->setReadOnly(m_document->hasDecodingError());
-    Core::InfoBar *infoBar = m_document->infoBar();
-    Core::Id selectEncodingId(Constants::SELECT_ENCODING);
+    InfoBar *infoBar = m_document->infoBar();
+    Id selectEncodingId(Constants::SELECT_ENCODING);
     if (m_document->hasDecodingError()) {
         if (!infoBar->canInfoBeAdded(selectEncodingId))
             return;
-        Core::InfoBarEntry info(selectEncodingId,
+        InfoBarEntry info(selectEncodingId,
             BaseTextEditorWidget::tr("<b>Error:</b> Could not decode \"%1\" with \"%2\"-encoding. Editing not possible.")
             .arg(m_document->displayName()).arg(QString::fromLatin1(m_document->codec()->name())));
-        info.setCustomButtonInfo(BaseTextEditorWidget::tr("Select Encoding"), q, SLOT(selectEncoding()));
+        info.setCustomButtonInfo(BaseTextEditorWidget::tr("Select Encoding"), [this]() { q->selectEncoding(); });
         infoBar->addInfo(info);
     } else {
         infoBar->removeInfo(selectEncodingId);
@@ -958,10 +960,10 @@ bool BaseTextEditorWidget::open(QString *errorString, const QString &fileName, c
         moveCursor(QTextCursor::Start);
         d->updateCannotDecodeInfo();
         if (d->m_fileEncodingLabel) {
-            connect(d->m_fileEncodingLabel, SIGNAL(clicked()), this,
-                    SLOT(selectEncoding()), Qt::UniqueConnection);
-            connect(d->m_document->document(), SIGNAL(modificationChanged(bool)), this,
-                    SLOT(updateTextCodecLabel()), Qt::UniqueConnection);
+            connect(d->m_fileEncodingLabel, &LineColumnLabel::clicked,
+                    this, &BaseTextEditorWidget::selectEncoding, Qt::UniqueConnection);
+            connect(d->m_document->document(), &QTextDocument::modificationChanged,
+                    this, &BaseTextEditorWidget::updateTextCodecLabel, Qt::UniqueConnection);
             updateTextCodecLabel();
         }
         return true;
@@ -998,6 +1000,11 @@ void BaseTextEditorWidgetPrivate::foldLicenseHeader()
 BaseTextDocument *BaseTextEditorWidget::textDocument() const
 {
     return d->m_document.data();
+}
+
+BaseTextDocumentPtr BaseTextEditorWidget::textDocumentPtr() const
+{
+    return d->m_document;
 }
 
 void BaseTextEditorWidgetPrivate::editorContentsChange(int position, int charsRemoved, int charsAdded)
@@ -1433,7 +1440,7 @@ void BaseTextEditorWidget::openLinkUnderCursorInNextSplit()
 
 void BaseTextEditorWidget::abortAssist()
 {
-    d->m_codeAssistant->destroyContext();
+    d->m_codeAssistant.destroyContext();
 }
 
 void BaseTextEditorWidgetPrivate::moveLineUpDown(bool up)
@@ -1519,18 +1526,17 @@ void BaseTextEditorWidgetPrivate::moveLineUpDown(bool up)
     m_refactorOverlay->setMarkers(nonAffectedMarkers + affectedMarkers);
 
     bool shouldReindent = true;
-    const CommentDefinition &cd = q->editor()->commentDefinition();
-    if (cd.isValid()) {
+    if (m_commentDefinition.isValid()) {
         QString trimmedText(text.trimmed());
 
-        if (cd.hasSingleLineStyle()) {
-            if (trimmedText.startsWith(cd.singleLine))
+        if (m_commentDefinition.hasSingleLineStyle()) {
+            if (trimmedText.startsWith(m_commentDefinition.singleLine))
                 shouldReindent = false;
         }
-        if (shouldReindent && cd.hasMultiLineStyle()) {
+        if (shouldReindent && m_commentDefinition.hasMultiLineStyle()) {
             // Don't have any single line comments; try multi line.
-            if (trimmedText.startsWith(cd.multiLineStart)
-                && trimmedText.endsWith(cd.multiLineEnd)) {
+            if (trimmedText.startsWith(m_commentDefinition.multiLineStart)
+                && trimmedText.endsWith(m_commentDefinition.multiLineEnd)) {
                 shouldReindent = false;
             }
         }
@@ -2016,7 +2022,7 @@ void BaseTextEditorWidget::keyPressEvent(QKeyEvent *e)
         cursor.beginEditBlock();
 
         int extraBlocks =
-            dd()->m_autoCompleter->paragraphSeparatorAboutToBeInserted(cursor,
+            d->m_autoCompleter->paragraphSeparatorAboutToBeInserted(cursor,
                                                                     d->m_document->tabSettings());
 
         QString previousIndentationString;
@@ -2216,7 +2222,7 @@ void BaseTextEditorWidget::keyPressEvent(QKeyEvent *e)
     case Qt::Key_Insert:
         if (ro) break;
         if (e->modifiers() == Qt::NoModifier) {
-            AutoCompleter *ac = dd()->m_autoCompleter.data();
+            AutoCompleter *ac = d->m_autoCompleter.data();
             if (inOverwriteMode) {
                 ac->setAutoParenthesesEnabled(d->autoParenthesisOverwriteBackup);
                 ac->setSurroundWithEnabled(d->surroundWithEnabledOverwriteBackup);
@@ -2275,7 +2281,7 @@ void BaseTextEditorWidget::keyPressEvent(QKeyEvent *e)
         // only go here if control is not pressed, except if also alt is pressed
         // because AltGr maps to Alt + Ctrl
         QTextCursor cursor = textCursor();
-        const QString &autoText = dd()->m_autoCompleter->autoComplete(cursor, eventText);
+        const QString &autoText = d->m_autoCompleter->autoComplete(cursor, eventText);
 
         QChar electricChar;
         if (d->m_document->typingSettings().m_autoIndent) {
@@ -2315,7 +2321,7 @@ void BaseTextEditorWidget::keyPressEvent(QKeyEvent *e)
             //Select the inserted text, to be able to re-indent the inserted text
             cursor.setPosition(pos, QTextCursor::KeepAnchor);
         }
-        if (!electricChar.isNull() && dd()->m_autoCompleter->contextAllowsElectricCharacters(cursor))
+        if (!electricChar.isNull() && d->m_autoCompleter->contextAllowsElectricCharacters(cursor))
             d->m_document->autoIndent(cursor, electricChar);
         if (!autoText.isEmpty())
             cursor.setPosition(autoText.length() == 1 ? cursor.position() : cursor.anchor());
@@ -2334,7 +2340,7 @@ void BaseTextEditorWidget::keyPressEvent(QKeyEvent *e)
         d->m_parenthesesMatchingTimer.start(50);
 
     if (!ro && d->m_contentsChanged && isPrintableText(eventText) && !inOverwriteMode)
-        d->m_codeAssistant->process();
+        d->m_codeAssistant.process();
 }
 
 void BaseTextEditorWidget::insertCodeSnippet(const QTextCursor &cursor_arg, const QString &snippet)
@@ -2468,6 +2474,16 @@ int BaseTextEditorWidget::position(BaseTextEditor::PositionOperation posOp, int 
     return -1;
 }
 
+QRect BaseTextEditorWidget::cursorRect(int pos) const
+{
+    QTextCursor tc = textCursor();
+    if (pos >= 0)
+        tc.setPosition(pos);
+    QRect result = cursorRect(tc);
+    result.moveTo(viewport()->mapToGlobal(result.topLeft()));
+    return result;
+}
+
 void BaseTextEditorWidget::convertPosition(int pos, int *line, int *column) const
 {
     Convenience::convertPosition(document(), pos, line, column);
@@ -2475,12 +2491,9 @@ void BaseTextEditorWidget::convertPosition(int pos, int *line, int *column) cons
 
 bool BaseTextEditorWidget::event(QEvent *e)
 {
-#if QT_VERSION >= 0x050000
-    if (e->type() != QEvent::InputMethodQuery)
+    // FIXME: That's far too heavy, and triggers e.g for ChildEvent
+    if (d && e->type() != QEvent::InputMethodQuery)
         d->m_contentsChanged = false;
-#else
-    d->m_contentsChanged = false;
-#endif
     switch (e->type()) {
     case QEvent::ShortcutOverride:
         if (static_cast<QKeyEvent*>(e)->key() == Qt::Key_Escape && d->m_snippetOverlay->isVisible()) {
@@ -2790,12 +2803,12 @@ int BaseTextEditorWidget::visibleWrapColumn() const
     return d->m_visibleWrapColumn;
 }
 
-void BaseTextEditor::setAutoCompleter(AutoCompleter *autoCompleter)
+void BaseTextEditorWidget::setAutoCompleter(AutoCompleter *autoCompleter)
 {
     d->m_autoCompleter.reset(autoCompleter);
 }
 
-AutoCompleter *BaseTextEditor::autoCompleter() const
+AutoCompleter *BaseTextEditorWidget::autoCompleter() const
 {
     return d->m_autoCompleter.data();
 }
@@ -2806,7 +2819,7 @@ AutoCompleter *BaseTextEditor::autoCompleter() const
 void BaseTextEditorWidgetPrivate::setupDocumentSignals()
 {
     QTextDocument *doc = m_document->document();
-    q->setDocument(doc);
+    q->QPlainTextEdit::setDocument(doc);
     q->setCursorWidth(2); // Applies to the document layout
 
     BaseTextDocumentLayout *documentLayout = qobject_cast<BaseTextDocumentLayout*>(doc->documentLayout());
@@ -2837,8 +2850,44 @@ void BaseTextEditorWidgetPrivate::setupDocumentSignals()
                      this, &BaseTextEditorWidgetPrivate::applyFontSettingsDelayed);
 
     slotUpdateExtraAreaWidth();
-}
 
+    TextEditorSettings *settings = TextEditorSettings::instance();
+
+    // Connect to settings change signals
+    connect(settings, &TextEditorSettings::fontSettingsChanged,
+            m_document.data(), &BaseTextDocument::setFontSettings);
+    connect(settings, &TextEditorSettings::typingSettingsChanged,
+            q, &BaseTextEditorWidget::setTypingSettings);
+    connect(settings, &TextEditorSettings::storageSettingsChanged,
+            q, &BaseTextEditorWidget::setStorageSettings);
+    connect(settings, &TextEditorSettings::behaviorSettingsChanged,
+            q, &BaseTextEditorWidget::setBehaviorSettings);
+    connect(settings, &TextEditorSettings::marginSettingsChanged,
+            q, &BaseTextEditorWidget::setMarginSettings);
+    connect(settings, &TextEditorSettings::displaySettingsChanged,
+            q, &BaseTextEditorWidget::setDisplaySettings);
+    connect(settings, &TextEditorSettings::completionSettingsChanged,
+            q, &BaseTextEditorWidget::setCompletionSettings);
+    connect(settings, &TextEditorSettings::extraEncodingSettingsChanged,
+            q, &BaseTextEditorWidget::setExtraEncodingSettings);
+
+    connect(q, &BaseTextEditorWidget::requestFontZoom,
+            settings, &TextEditorSettings::fontZoomRequested);
+    connect(q, &BaseTextEditorWidget::requestZoomReset,
+            settings, &TextEditorSettings::zoomResetRequested);
+
+    // Apply current settings
+    m_document->setFontSettings(settings->fontSettings());
+    m_document->setTabSettings(settings->codeStyle()->tabSettings()); // also set through code style ???
+    q->setTypingSettings(settings->typingSettings());
+    q->setStorageSettings(settings->storageSettings());
+    q->setBehaviorSettings(settings->behaviorSettings());
+    q->setMarginSettings(settings->marginSettings());
+    q->setDisplaySettings(settings->displaySettings());
+    q->setCompletionSettings(settings->completionSettings());
+    q->setExtraEncodingSettings(settings->extraEncodingSettings());
+    q->setCodeStyle(settings->codeStyle(q->languageSettingsId()));
+}
 
 bool BaseTextEditorWidgetPrivate::snippetCheckCursor(const QTextCursor &cursor)
 {
@@ -2908,10 +2957,9 @@ void BaseTextEditorWidgetPrivate::processTooltipRequest(const QTextCursor &c)
 {
     const QPoint toolTipPoint = q->toolTipPosition(c);
     bool handled = false;
-    BaseTextEditor *ed = q->editor();
-    emit ed->tooltipOverrideRequested(ed, toolTipPoint, c.position(), &handled);
+    emit q->tooltipOverrideRequested(toolTipPoint, c.position(), &handled);
     if (!handled)
-        emit ed->tooltipRequested(ed, toolTipPoint, c.position());
+        emit q->tooltipRequested(toolTipPoint, c.position());
 }
 
 bool BaseTextEditorWidget::viewportEvent(QEvent *event)
@@ -3048,7 +3096,7 @@ void BaseTextEditorWidgetPrivate::highlightSearchResults(const QTextBlock &block
         l = m_searchExpr.matchedLength();
         if (l == 0)
             break;
-        if ((m_findFlags & Core::FindWholeWords)
+        if ((m_findFlags & FindWholeWords)
             && ((idx && text.at(idx-1).isLetterOrNumber())
                 || (idx + l < text.length() && text.at(idx + l).isLetterOrNumber())))
             continue;
@@ -3874,7 +3922,7 @@ void BaseTextEditorWidget::paintEvent(QPaintEvent *e)
         if (!block.isVisible()) {
             if (block.blockNumber() == d->visibleFoldedBlockNumber) {
                 visibleCollapsedBlock = block;
-                visibleCollapsedBlockOffset = offset + QPointF(0,1);
+                visibleCollapsedBlockOffset = offset;
             }
 
             // invisible blocks do have zero line count
@@ -4180,7 +4228,7 @@ static void drawRectBox(QPainter *painter, const QRect &rect, bool start, bool e
 
     QRgb b = pal.base().color().rgb();
     QRgb h = pal.highlight().color().rgb();
-    QColor c = Utils::StyleHelper::mergedColors(b,h, 50);
+    QColor c = StyleHelper::mergedColors(b,h, 50);
 
     QLinearGradient grad(rect.topLeft(), rect.topRight());
     grad.setColorAt(0, c.lighter(110));
@@ -4500,7 +4548,8 @@ void BaseTextEditorWidget::slotCursorPositionChanged()
             << "indent:" << BaseTextDocumentLayout::userData(textCursor().block())->foldingIndent();
 #endif
     if (!d->m_contentsChanged && d->m_lastCursorChangeWasInteresting) {
-        Core::EditorManager::addCurrentPositionToNavigationHistory(editor(), d->m_tempNavigationState);
+        if (EditorManager::currentEditor() && EditorManager::currentEditor()->widget() == this)
+            EditorManager::addCurrentPositionToNavigationHistory(d->m_tempNavigationState);
         d->m_lastCursorChangeWasInteresting = false;
     } else if (d->m_contentsChanged) {
         d->saveCurrentCursorPositionForNavigation();
@@ -4681,11 +4730,11 @@ void BaseTextEditorWidget::mouseMoveEvent(QMouseEvent *e)
 static bool handleForwardBackwardMouseButtons(QMouseEvent *e)
 {
     if (e->button() == Qt::XButton1) {
-        Core::EditorManager::goBackInNavigationHistory();
+        EditorManager::goBackInNavigationHistory();
         return true;
     }
     if (e->button() == Qt::XButton2) {
-        Core::EditorManager::goForwardInNavigationHistory();
+        EditorManager::goForwardInNavigationHistory();
         return true;
     }
 
@@ -4725,7 +4774,7 @@ void BaseTextEditorWidget::mousePressEvent(QMouseEvent *e)
 
             RefactorMarker refactorMarker = d->m_refactorOverlay->markerAt(e->pos());
             if (refactorMarker.isValid()) {
-                emit refactorMarkerClicked(refactorMarker);
+                onRefactorMarkerClicked(refactorMarker);
             } else {
                 d->updateLink(e);
 
@@ -4756,7 +4805,7 @@ void BaseTextEditorWidget::mouseReleaseEvent(QMouseEvent *e)
             && e->button() == Qt::LeftButton
             ) {
 
-        Core::EditorManager::addCurrentPositionToNavigationHistory();
+        EditorManager::addCurrentPositionToNavigationHistory();
         bool inNextSplit = ((e->modifiers() & Qt::AltModifier) && !alwaysOpenLinksInNextSplit())
                 || (alwaysOpenLinksInNextSplit() && !(e->modifiers() & Qt::AltModifier));
         if (openLink(findLinkAt(cursorForPosition(e->pos())), inNextSplit)) {
@@ -4820,16 +4869,16 @@ void BaseTextEditorWidget::dragEnterEvent(QDragEnterEvent *e)
     QPlainTextEdit::dragEnterEvent(e);
 }
 
-static void appendMenuActionsFromContext(QMenu *menu, Core::Id menuContextId)
+static void appendMenuActionsFromContext(QMenu *menu, Id menuContextId)
 {
-    Core::ActionContainer *mcontext = Core::ActionManager::actionContainer(menuContextId);
+    ActionContainer *mcontext = ActionManager::actionContainer(menuContextId);
     QMenu *contextMenu = mcontext->menu();
 
     foreach (QAction *action, contextMenu->actions())
         menu->addAction(action);
 }
 
-void BaseTextEditorWidget::showDefaultContextMenu(QContextMenuEvent *e, Core::Id menuContextId)
+void BaseTextEditorWidget::showDefaultContextMenu(QContextMenuEvent *e, Id menuContextId)
 {
     QMenu menu;
     appendMenuActionsFromContext(&menu, menuContextId);
@@ -4846,10 +4895,10 @@ void BaseTextEditorWidget::extraAreaLeaveEvent(QEvent *)
 
 void BaseTextEditorWidget::extraAreaContextMenuEvent(QContextMenuEvent *e)
 {
-    QTextCursor cursor = cursorForPosition(QPoint(0, e->pos().y()));
     if (d->m_marksVisible) {
+        QTextCursor cursor = cursorForPosition(QPoint(0, e->pos().y()));
         QMenu * contextMenu = new QMenu(this);
-        emit editor()->markContextMenuRequested(editor(), cursor.blockNumber() + 1, contextMenu);
+        emit markContextMenuRequested(cursor.blockNumber() + 1, contextMenu);
         if (!contextMenu->isEmpty())
             contextMenu->exec(e->globalPos());
         delete contextMenu;
@@ -4897,7 +4946,7 @@ void BaseTextEditorWidget::extraAreaMouseEvent(QMouseEvent *e)
         if (inMarkArea) {
             //Find line by cursor position
             int line = cursor.blockNumber() + 1;
-            emit editor()->markTooltipRequested(editor(), mapToGlobal(e->pos()), line);
+            emit markTooltipRequested(mapToGlobal(e->pos()), line);
         }
 
         if (e->buttons() & Qt::LeftButton && !d->m_markDragStart.isNull()) {
@@ -5015,7 +5064,7 @@ void BaseTextEditorWidget::extraAreaMouseEvent(QMouseEvent *e)
             else
                 kind = BaseTextEditor::BreakpointRequest;
 
-            emit editor()->markRequested(editor(), line, kind);
+            emit markRequested(line, kind);
         }
     }
 }
@@ -5057,12 +5106,12 @@ void BaseTextEditorWidgetPrivate::toggleBlockVisible(const QTextBlock &block)
     documentLayout->emitDocumentSizeChanged();
 }
 
-void BaseTextEditorWidget::setLanguageSettingsId(Core::Id settingsId)
+void BaseTextEditorWidget::setLanguageSettingsId(Id settingsId)
 {
     d->m_tabSettingsId = settingsId;
 }
 
-Core::Id BaseTextEditorWidget::languageSettingsId() const
+Id BaseTextEditorWidget::languageSettingsId() const
 {
     return d->m_tabSettingsId;
 }
@@ -5149,7 +5198,7 @@ void BaseTextEditorWidgetPrivate::handleBackspaceKey()
     const TextEditor::TabSettings &tabSettings = m_document->tabSettings();
     const TextEditor::TypingSettings &typingSettings = m_document->typingSettings();
 
-    if (typingSettings.m_autoIndent && dd()->m_autoCompleter->autoBackspace(cursor))
+    if (typingSettings.m_autoIndent && m_autoCompleter->autoBackspace(cursor))
         return;
 
     bool handled = false;
@@ -5239,15 +5288,16 @@ void BaseTextEditorWidget::wheelEvent(QWheelEvent *e)
     QPlainTextEdit::wheelEvent(e);
 }
 
-void BaseTextEditorWidget::zoomIn(int range)
+void BaseTextEditorWidget::zoomIn()
 {
     d->clearVisibleFoldedBlock();
-    emit requestFontZoom(range*10);
+    emit requestFontZoom(10);
 }
 
-void BaseTextEditorWidget::zoomOut(int range)
+void BaseTextEditorWidget::zoomOut()
 {
-    zoomIn(-range);
+    d->clearVisibleFoldedBlock();
+    emit requestFontZoom(-10);
 }
 
 void BaseTextEditorWidget::zoomReset()
@@ -5266,15 +5316,15 @@ bool BaseTextEditorWidget::openLink(const Link &link, bool inNextSplit)
         return false;
 
     if (inNextSplit) {
-        Core::EditorManager::gotoOtherSplit();
+        EditorManager::gotoOtherSplit();
     } else if (textDocument()->filePath() == link.targetFileName) {
-        Core::EditorManager::addCurrentPositionToNavigationHistory();
+        EditorManager::addCurrentPositionToNavigationHistory();
         gotoLine(link.targetLine, link.targetColumn);
         setFocus();
         return true;
     }
 
-    return Core::EditorManager::openEditorAt(link.targetFileName, link.targetLine, link.targetColumn);
+    return EditorManager::openEditorAt(link.targetFileName, link.targetLine, link.targetColumn);
 }
 
 void BaseTextEditorWidgetPrivate::updateLink(QMouseEvent *e)
@@ -5333,7 +5383,7 @@ void BaseTextEditorWidgetPrivate::clearLink()
     m_linkPressed = false;
 }
 
-void BaseTextEditorWidgetPrivate::highlightSearchResultsSlot(const QString &txt, Core::FindFlags findFlags)
+void BaseTextEditorWidgetPrivate::highlightSearchResultsSlot(const QString &txt, FindFlags findFlags)
 {
     if (m_searchExpr.pattern() == txt)
         return;
@@ -5403,16 +5453,14 @@ void BaseTextEditorWidgetPrivate::_q_animateUpdate(int position, QPointF lastPos
 
 
 BaseTextEditorAnimator::BaseTextEditorAnimator(QObject *parent)
-        :QObject(parent)
+    : QObject(parent), m_timeline(256)
 {
     m_value = 0;
-    m_timeline = new QTimeLine(256, this);
-    m_timeline->setCurveShape(QTimeLine::SineCurve);
-    connect(m_timeline, SIGNAL(valueChanged(qreal)), this, SLOT(step(qreal)));
-    connect(m_timeline, SIGNAL(finished()), this, SLOT(deleteLater()));
-    m_timeline->start();
+    m_timeline.setCurveShape(QTimeLine::SineCurve);
+    connect(&m_timeline, &QTimeLine::valueChanged, this, &BaseTextEditorAnimator::step);
+    connect(&m_timeline, &QTimeLine::finished, this, &QObject::deleteLater);
+    m_timeline.start();
 }
-
 
 void BaseTextEditorAnimator::setData(const QFont &f, const QPalette &pal, const QString &text)
 {
@@ -5440,7 +5488,7 @@ void BaseTextEditorAnimator::draw(QPainter *p, const QPointF &pos)
 
 bool BaseTextEditorAnimator::isRunning() const
 {
-    return m_timeline->state() == QTimeLine::Running;
+    return m_timeline.state() == QTimeLine::Running;
 }
 
 QRectF BaseTextEditorAnimator::rect() const
@@ -5462,7 +5510,7 @@ void BaseTextEditorAnimator::step(qreal v)
 
 void BaseTextEditorAnimator::finish()
 {
-    m_timeline->stop();
+    m_timeline.stop();
     step(0);
     deleteLater();
 }
@@ -5971,7 +6019,7 @@ void BaseTextEditorWidget::rewrapParagraph()
 
 void BaseTextEditorWidget::unCommentSelection()
 {
-    Utils::unCommentSelection(this, editor()->commentDefinition());
+    Utils::unCommentSelection(this, d->m_commentDefinition);
 }
 
 void BaseTextEditorWidget::showEvent(QShowEvent* e)
@@ -6092,8 +6140,8 @@ void BaseTextEditorWidget::setStorageSettings(const StorageSettings &storageSett
 
 void BaseTextEditorWidget::setCompletionSettings(const TextEditor::CompletionSettings &completionSettings)
 {
-    dd()->m_autoCompleter->setAutoParenthesesEnabled(completionSettings.m_autoInsertBrackets);
-    dd()->m_autoCompleter->setSurroundWithEnabled(completionSettings.m_autoInsertBrackets
+    d->m_autoCompleter->setAutoParenthesesEnabled(completionSettings.m_autoInsertBrackets);
+    d->m_autoCompleter->setSurroundWithEnabled(completionSettings.m_autoInsertBrackets
                                                && completionSettings.m_surroundingAutoBrackets);
 }
 
@@ -6347,8 +6395,8 @@ void BaseTextEditorWidget::insertFromMimeData(const QMimeData *source)
     if (text.isEmpty())
         return;
 
-    if (d->m_codeAssistant->hasContext())
-        d->m_codeAssistant->destroyContext();
+    if (d->m_codeAssistant.hasContext())
+        d->m_codeAssistant.destroyContext();
 
     if (d->m_inBlockSelectionMode) {
         d->insertIntoBlockSelection(text);
@@ -6468,35 +6516,33 @@ QColor BaseTextEditorWidget::replacementPenColor(int blockNumber) const
     return QColor();
 }
 
-BaseTextEditor *BaseTextEditorWidget::createEditor()
+void BaseTextEditorWidget::setupFallBackEditor(Id id)
 {
-    auto editor = new BaseTextEditor(this);
-    editor->setContext(Core::Context(Core::Constants::K_DEFAULT_TEXT_EDITOR_ID,
-                      TextEditor::Constants::C_TEXTEDITOR));
-    editor->setDuplicateSupported(true);
-    return editor;
+    BaseTextDocumentPtr doc(new BaseTextDocument(id));
+    doc->setFontSettings(TextEditorSettings::fontSettings());
+    setTextDocument(doc);
 }
 
 void BaseTextEditorWidget::appendStandardContextMenuActions(QMenu *menu)
 {
     menu->addSeparator();
 
-    QAction *a = Core::ActionManager::command(Core::Constants::CUT)->action();
+    QAction *a = ActionManager::command(Core::Constants::CUT)->action();
     if (a && a->isEnabled())
         menu->addAction(a);
-    a = Core::ActionManager::command(Core::Constants::COPY)->action();
+    a = ActionManager::command(Core::Constants::COPY)->action();
     if (a && a->isEnabled())
         menu->addAction(a);
-    a = Core::ActionManager::command(Core::Constants::PASTE)->action();
+    a = ActionManager::command(Core::Constants::PASTE)->action();
     if (a && a->isEnabled())
         menu->addAction(a);
-    a = Core::ActionManager::command(Constants::CIRCULAR_PASTE)->action();
+    a = ActionManager::command(Constants::CIRCULAR_PASTE)->action();
     if (a && a->isEnabled())
         menu->addAction(a);
 
     BaseTextDocument *doc = textDocument();
     if (doc->codec()->name() == QByteArray("UTF-8") && doc->supportsUtf8Bom()) {
-        a = Core::ActionManager::command(Constants::SWITCH_UTF8BOM)->action();
+        a = ActionManager::command(Constants::SWITCH_UTF8BOM)->action();
         if (a && a->isEnabled()) {
             a->setText(doc->format().hasUtf8Bom ? tr("Delete UTF-8 BOM on Save")
                                                 : tr("Add UTF-8 BOM on Save"));
@@ -6507,34 +6553,38 @@ void BaseTextEditorWidget::appendStandardContextMenuActions(QMenu *menu)
 }
 
 
-BaseTextEditor::BaseTextEditor(BaseTextEditorWidget *widget)
+BaseTextEditor::BaseTextEditor()
     : d(new BaseTextEditorPrivate)
 {
-    setWidget(widget);
-    d->m_editorWidget = widget;
-
-    d->m_completionAssistProvider = [] () -> CompletionAssistProvider * { return 0; };
+    addContext(TextEditor::Constants::C_TEXTEDITOR);
 }
 
 BaseTextEditor::~BaseTextEditor()
 {
-    delete d->m_editorWidget;
+    delete m_widget;
     delete d;
 }
 
-BaseTextDocument *BaseTextEditor::textDocument()
+BaseTextDocument *BaseTextEditor::textDocument() const
 {
-    return d->m_editorWidget->textDocument();
+    BaseTextEditorWidget *widget = editorWidget();
+    QTC_CHECK(!widget->d->m_document.isNull());
+    return widget->d->m_document.data();
+}
+
+void BaseTextEditor::addContext(Id id)
+{
+    m_context.add(id);
 }
 
 IDocument *BaseTextEditor::document()
 {
-    return d->m_editorWidget->textDocument();
+    return textDocument();
 }
 
 QWidget *BaseTextEditor::toolBar()
 {
-    return d->m_editorWidget->d->m_toolBar;
+    return editorWidget()->d->m_toolBar;
 }
 
 void BaseTextEditorWidget::insertExtraToolBarWidget(BaseTextEditorWidget::Side side,
@@ -6554,113 +6604,103 @@ void BaseTextEditorWidget::insertExtraToolBarWidget(BaseTextEditorWidget::Side s
 
 int BaseTextEditor::currentLine() const
 {
-    return d->m_editorWidget->textCursor().blockNumber() + 1;
+    return editorWidget()->textCursor().blockNumber() + 1;
 }
 
 int BaseTextEditor::currentColumn() const
 {
-    QTextCursor cursor = d->m_editorWidget->textCursor();
+    QTextCursor cursor = editorWidget()->textCursor();
     return cursor.position() - cursor.block().position() + 1;
 }
 
 void BaseTextEditor::gotoLine(int line, int column, bool centerLine)
 {
-    d->m_editorWidget->gotoLine(line, column, centerLine);
+    editorWidget()->gotoLine(line, column, centerLine);
 }
 
 int BaseTextEditor::columnCount() const
 {
-    return d->m_editorWidget->columnCount();
+    return editorWidget()->columnCount();
 }
 
 int BaseTextEditor::rowCount() const
 {
-    return d->m_editorWidget->rowCount();
+    return editorWidget()->rowCount();
 }
 
 int BaseTextEditor::position(BaseTextEditor::PositionOperation posOp, int at) const
 {
-    return d->m_editorWidget->position(posOp, at);
+    return editorWidget()->position(posOp, at);
 }
 
 void BaseTextEditor::convertPosition(int pos, int *line, int *column) const
 {
-    d->m_editorWidget->convertPosition(pos, line, column);
+    editorWidget()->convertPosition(pos, line, column);
 }
 
 QRect BaseTextEditor::cursorRect(int pos) const
 {
-    QTextCursor tc = d->m_editorWidget->textCursor();
-    if (pos >= 0)
-        tc.setPosition(pos);
-    QRect result = d->m_editorWidget->cursorRect(tc);
-    result.moveTo(d->m_editorWidget->viewport()->mapToGlobal(result.topLeft()));
-    return result;
+    return editorWidget()->cursorRect(pos);
 }
 
 QString BaseTextEditor::selectedText() const
 {
-    return d->m_editorWidget->selectedText();
+    return editorWidget()->selectedText();
 }
 
 void BaseTextEditor::remove(int length)
 {
-    QTextCursor tc = d->m_editorWidget->textCursor();
+    editorWidget()->remove(length);
+}
+
+void BaseTextEditorWidget::remove(int length)
+{
+    QTextCursor tc = textCursor();
     tc.setPosition(tc.position() + length, QTextCursor::KeepAnchor);
     tc.removeSelectedText();
 }
 
 void BaseTextEditor::insert(const QString &string)
 {
-    d->m_editorWidget->insertPlainText(string);
+    editorWidget()->insertPlainText(string);
 }
 
 void BaseTextEditor::replace(int length, const QString &string)
 {
-    QTextCursor tc = d->m_editorWidget->textCursor();
+    editorWidget()->replace(length, string);
+}
+
+void BaseTextEditorWidget::replace(int length, const QString &string)
+{
+    QTextCursor tc = textCursor();
     tc.setPosition(tc.position() + length, QTextCursor::KeepAnchor);
     tc.insertText(string);
 }
 
 void BaseTextEditor::setCursorPosition(int pos)
 {
-    d->m_editorWidget->setBlockSelection(false);
-    QTextCursor tc = d->m_editorWidget->textCursor();
+    editorWidget()->setCursorPosition(pos);
+}
+
+void BaseTextEditorWidget::setCursorPosition(int pos)
+{
+    setBlockSelection(false);
+    QTextCursor tc = textCursor();
     tc.setPosition(pos);
-    d->m_editorWidget->setTextCursor(tc);
+    setTextCursor(tc);
 }
 
 void BaseTextEditor::select(int toPos)
 {
-    d->m_editorWidget->setBlockSelection(false);
-    QTextCursor tc = d->m_editorWidget->textCursor();
+    editorWidget()->setBlockSelection(false);
+    QTextCursor tc = editorWidget()->textCursor();
     tc.setPosition(toPos, QTextCursor::KeepAnchor);
-    d->m_editorWidget->setTextCursor(tc);
+    editorWidget()->setTextCursor(tc);
 }
 
-CommentDefinition &BaseTextEditor::commentDefinition() const
+CompletionAssistProvider *BaseTextEditorWidget::completionAssistProvider() const
 {
-    return d->m_commentDefinition;
-}
-
-void BaseTextEditor::setCommentStyle(CommentDefinition::Style style)
-{
-    d->m_commentDefinition.setStyle(style);
-}
-
-CompletionAssistProvider *BaseTextEditor::completionAssistProvider()
-{
-    return d->m_completionAssistProvider();
-}
-
-void BaseTextEditor::setCompletionAssistProvider(CompletionAssistProvider *provider)
-{
-    d->m_completionAssistProvider = [provider] () -> CompletionAssistProvider * { return provider; };
-}
-
-void BaseTextEditor::setCompletionAssistProvider(const std::function<CompletionAssistProvider *()> &provider)
-{
-    d->m_completionAssistProvider = provider;
+    return d->m_completionAssistProvider;
 }
 
 void BaseTextEditorWidgetPrivate::updateCursorPosition()
@@ -6674,7 +6714,7 @@ void BaseTextEditorWidgetPrivate::updateCursorPosition()
                                    .arg(q->textDocument()->tabSettings().columnAt(block.text(),
                                                                                    column)+1),
                                    tr("Line: 9999, Col: 999"));
-    q->editor()->m_contextHelpId.clear();
+    q->clearContentsHelpId();
 
     if (!block.isVisible())
         q->ensureCursorVisible();
@@ -6684,7 +6724,7 @@ QString BaseTextEditor::contextHelpId() const
 {
     if (m_contextHelpId.isEmpty())
         emit const_cast<BaseTextEditor*>(this)->contextHelpIdRequested(const_cast<BaseTextEditor*>(this),
-                                                                       d->m_editorWidget->textCursor().position());
+                                                                       editorWidget()->textCursor().position());
     return m_contextHelpId;
 }
 
@@ -6713,11 +6753,6 @@ void BaseTextEditorWidget::doFoo()
     markers += marker;
     setRefactorMarkers(markers);
 #endif
-}
-
-BaseTextEditorPrivate *BaseTextEditorWidget::dd() const
-{
-    return editor()->d;
 }
 
 BaseTextBlockSelection::BaseTextBlockSelection(const BaseTextBlockSelection &other)
@@ -6965,12 +7000,17 @@ void BaseTextEditorWidget::inSnippetMode(bool *active)
     *active = d->m_snippetOverlay->isVisible();
 }
 
+void BaseTextEditorWidget::setCompletionAssistProvider(CompletionAssistProvider *provider)
+{
+    d->m_completionAssistProvider = provider;
+}
+
 void BaseTextEditorWidget::invokeAssist(AssistKind kind, IAssistProvider *provider)
 {
     bool previousMode = overwriteMode();
     setOverwriteMode(false);
     ensureCursorVisible();
-    d->m_codeAssistant->invoke(kind, provider);
+    d->m_codeAssistant.invoke(kind, provider);
     setOverwriteMode(previousMode);
 }
 
@@ -6988,27 +7028,66 @@ QString BaseTextEditorWidget::foldReplacementText(const QTextBlock &) const
 
 bool BaseTextEditor::open(QString *errorString, const QString &fileName, const QString &realFileName)
 {
-    return d->m_editorWidget->open(errorString, fileName, realFileName);
+    if (!editorWidget()->open(errorString, fileName, realFileName))
+        return false;
+    textDocument()->setMimeType(Core::MimeDatabase::findByFile(QFileInfo(fileName)).type());
+    return true;
 }
 
 QByteArray BaseTextEditor::saveState() const
 {
-    return d->m_editorWidget->saveState();
+    return editorWidget()->saveState();
 }
 
 bool BaseTextEditor::restoreState(const QByteArray &state)
 {
-    return d->m_editorWidget->restoreState(state);
+    return editorWidget()->restoreState(state);
 }
 
 BaseTextEditor *BaseTextEditor::currentTextEditor()
 {
-    return qobject_cast<BaseTextEditor *>(Core::EditorManager::currentEditor());
+    return qobject_cast<BaseTextEditor *>(EditorManager::currentEditor());
 }
 
 BaseTextEditorWidget *BaseTextEditor::editorWidget() const
 {
-    return d->m_editorWidget;
+    QTC_ASSERT(qobject_cast<BaseTextEditorWidget *>(m_widget.data()), return 0);
+    return static_cast<BaseTextEditorWidget *>(m_widget.data());
+}
+
+QTextDocument *BaseTextEditor::qdocument() const
+{
+    return textDocument()->document();
+}
+
+void BaseTextEditor::setTextCursor(const QTextCursor &cursor)
+{
+    editorWidget()->setTextCursor(cursor);
+}
+
+QTextCursor BaseTextEditor::textCursor() const
+{
+    return editorWidget()->textCursor();
+}
+
+QChar BaseTextEditor::characterAt(int pos) const
+{
+    return textDocument()->characterAt(pos);
+}
+
+QString BaseTextEditor::textAt(int from, int to) const
+{
+    return textDocument()->textAt(from, to);
+}
+
+QChar BaseTextEditorWidget::characterAt(int pos) const
+{
+    return textDocument()->characterAt(pos);
+}
+
+QString BaseTextEditorWidget::textAt(int from, int to) const
+{
+    return textDocument()->textAt(from, to);
 }
 
 void BaseTextEditorWidget::configureMimeType(const QString &mimeType)
@@ -7040,11 +7119,10 @@ void BaseTextEditorWidget::configureMimeType(const MimeType &mimeType)
             const QSharedPointer<HighlightDefinition> &definition =
                 Manager::instance()->definition(definitionId);
             if (!definition.isNull() && definition->isValid()) {
-                CommentDefinition &cd = editor()->commentDefinition();
-                cd.isAfterWhiteSpaces = definition->isCommentAfterWhiteSpaces();
-                cd.singleLine = definition->singleLineComment();
-                cd.multiLineStart = definition->multiLineCommentStart();
-                cd.multiLineEnd = definition->multiLineCommentEnd();
+                d->m_commentDefinition.isAfterWhiteSpaces = definition->isCommentAfterWhiteSpaces();
+                d->m_commentDefinition.singleLine = definition->singleLineComment();
+                d->m_commentDefinition.multiLineStart = definition->multiLineCommentStart();
+                d->m_commentDefinition.multiLineEnd = definition->multiLineCommentEnd();
 
                 setCodeFoldingSupported(true);
             }
@@ -7057,27 +7135,12 @@ void BaseTextEditorWidget::configureMimeType(const MimeType &mimeType)
 
     textDocument()->setFontSettings(TextEditorSettings::fontSettings());
 
-    emit configured(editor());
+    updateEditorInfoBar(this);
 }
 
 bool BaseTextEditorWidget::isMissingSyntaxDefinition() const
 {
     return d->m_isMissingSyntaxDefinition;
-}
-
-void BaseTextEditorWidget::acceptMissingSyntaxDefinitionInfo()
-{
-    ICore::showOptionsDialog(Constants::TEXT_EDITOR_SETTINGS_CATEGORY,
-                             Constants::TEXT_EDITOR_HIGHLIGHTER_SETTINGS,
-                             this);
-}
-
-void BaseTextEditorWidget::configureMimeType()
-{
-    MimeType mimeType;
-    if (textDocument())
-        mimeType = MimeDatabase::findByFile(textDocument()->filePath());
-    configureMimeType(mimeType);
 }
 
 // The remnants of PlainTextEditor.
@@ -7086,23 +7149,188 @@ void BaseTextEditorWidget::setupAsPlainEditor()
     setRevisionsVisible(true);
     setMarksVisible(true);
     setLineSeparatorsAllowed(true);
+    setLineSeparatorsAllowed(true);
 
     textDocument()->setMimeType(QLatin1String(TextEditor::Constants::C_TEXTEDITOR_MIMETYPE_TEXT));
 
-    connect(textDocument(), SIGNAL(filePathChanged(QString,QString)),
-            this, SLOT(configureMimeType()));
-    connect(Manager::instance(), SIGNAL(mimeTypesRegistered()), this, SLOT(configureMimeType()));
+    auto reconf = [this]() {
+        MimeType mimeType;
+        if (textDocument())
+            mimeType = MimeDatabase::findByFile(textDocument()->filePath());
+        configureMimeType(mimeType);
+    };
+
+    connect(textDocument(), &IDocument::filePathChanged, reconf);
+    connect(Manager::instance(), &Manager::mimeTypesRegistered, reconf);
+
+    updateEditorInfoBar(this);
 }
 
 IEditor *BaseTextEditor::duplicate()
 {
-    auto newWidget = new BaseTextEditorWidget(editorWidget());
-    newWidget->setupAsPlainEditor();
-    TextEditorSettings::initializeEditor(newWidget);
-    auto editor = newWidget->editor();
-    editor->setContext(Core::Context(Core::Constants::K_DEFAULT_TEXT_EDITOR_ID,
-                        TextEditor::Constants::C_TEXTEDITOR));
-    editor->setDuplicateSupported(true);
+    // Use new standard setup if that's available.
+    if (d->m_origin)
+        return d->m_origin->duplicateTextEditor(this);
+
+    // If neither is sufficient, you need to implement 'YourEditor::duplicate'.
+    QTC_CHECK(false);
+    return 0;
+}
+
+
+//
+// BaseTextEditorFactory
+//
+
+BaseTextEditorFactory::BaseTextEditorFactory(QObject *parent)
+    : IEditorFactory(parent)
+{
+    m_editorCreator = []() { return new BaseTextEditor; };
+    m_widgetCreator = []() { return new BaseTextEditorWidget; };
+    m_commentStyle = CommentDefinition::NoStyle;
+    m_duplicatedSupported = true;
+}
+
+void BaseTextEditorFactory::setDocumentCreator(const DocumentCreator &creator)
+{
+    m_documentCreator = creator;
+}
+
+void BaseTextEditorFactory::setEditorWidgetCreator(const EditorWidgetCreator &creator)
+{
+    m_widgetCreator = creator;
+}
+
+void BaseTextEditorFactory::setEditorCreator(const EditorCreator &creator)
+{
+    m_editorCreator = creator;
+}
+
+void BaseTextEditorFactory::setIndenterCreator(const IndenterCreator &creator)
+{
+    m_indenterCreator = creator;
+}
+
+void BaseTextEditorFactory::setSyntaxHighlighterCreator(const SyntaxHighLighterCreator &creator)
+{
+    m_syntaxHighlighterCreator = creator;
+}
+
+void BaseTextEditorFactory::setGenericSyntaxHighlighter(const QString &mimeType)
+{
+    m_syntaxHighlighterCreator = [this, mimeType]() -> SyntaxHighlighter * {
+        Highlighter *highlighter = new TextEditor::Highlighter();
+        setMimeTypeForHighlighter(highlighter, Core::MimeDatabase::findByType(mimeType));
+        return highlighter;
+    };
+}
+
+void BaseTextEditorFactory::setAutoCompleterCreator(const AutoCompleterCreator &creator)
+{
+    m_autoCompleterCreator = creator;
+}
+
+void BaseTextEditorFactory::setEditorActionHandlers(Id contextId, uint optionalActions)
+{
+    new TextEditorActionHandler(this, contextId, optionalActions);
+}
+
+void BaseTextEditorFactory::setEditorActionHandlers(uint optionalActions)
+{
+    new TextEditorActionHandler(this, id(), optionalActions);
+}
+
+void BaseTextEditorFactory::setCommentStyle(CommentDefinition::Style style)
+{
+    m_commentStyle = style;
+}
+
+void BaseTextEditorFactory::setDuplicatedSupported(bool on)
+{
+    m_duplicatedSupported = on;
+}
+
+BaseTextEditor *BaseTextEditorFactory::duplicateTextEditor(BaseTextEditor *other)
+{
+    BaseTextEditor *editor = createEditorHelper(other->editorWidget()->textDocumentPtr());
+    editor->editorWidget()->finalizeInitializationAfterDuplication(other->editorWidget());
+    return editor;
+}
+
+IEditor *BaseTextEditorFactory::createEditor()
+{
+    BaseTextDocumentPtr doc(m_documentCreator());
+
+    if (m_indenterCreator)
+        doc->setIndenter(m_indenterCreator());
+
+    if (m_syntaxHighlighterCreator) {
+        SyntaxHighlighter *highlighter = m_syntaxHighlighterCreator();
+        highlighter->setParent(doc.data());
+        doc->setSyntaxHighlighter(highlighter);
+    }
+
+    return createEditorHelper(doc);
+}
+
+BaseTextEditor *BaseTextEditorFactory::createEditorHelper(const BaseTextDocumentPtr &document)
+{
+    BaseTextEditorWidget *widget = m_widgetCreator();
+    BaseTextEditor *editor = m_editorCreator();
+    editor->setDuplicateSupported(m_duplicatedSupported);
+    editor->addContext(id());
+    editor->d->m_origin = this;
+
+    editor->m_widget = widget;
+    widget->setTextDocument(document);
+
+    widget->d->m_codeAssistant.configure(editor);
+    widget->d->m_commentDefinition.setStyle(m_commentStyle);
+
+    if (m_autoCompleterCreator)
+        widget->setAutoCompleter(m_autoCompleterCreator());
+
+    connect(widget, &BaseTextEditorWidget::markRequested, editor,
+            [editor](int line, BaseTextEditor::MarkRequestKind kind) {
+                editor->markRequested(editor, line, kind);
+            });
+
+    connect(widget, &BaseTextEditorWidget::markContextMenuRequested, editor,
+            [editor](int line, QMenu *menu) {
+                editor->markContextMenuRequested(editor, line, menu);
+            });
+
+    connect(widget, &BaseTextEditorWidget::tooltipOverrideRequested, editor,
+            [editor](const QPoint &globalPos, int position, bool *handled) {
+                editor->tooltipOverrideRequested(editor, globalPos, position, handled);
+            });
+
+    connect(widget, &BaseTextEditorWidget::tooltipRequested, editor,
+            [editor](const QPoint &globalPos, int position) {
+                editor->tooltipRequested(editor, globalPos, position);
+            });
+
+    connect(widget, &BaseTextEditorWidget::markTooltipRequested, editor,
+            [editor](const QPoint &globalPos, int line) {
+                editor->markTooltipRequested(editor, globalPos, line);
+            });
+
+    connect(widget, &BaseTextEditorWidget::activateEditor,
+            [editor]() { Core::EditorManager::activateEditor(editor); });
+
+    connect(widget, &BaseTextEditorWidget::clearContentsHelpId,
+            [editor]() { editor->setContextHelpId(QString()); });
+
+    widget->finalizeInitialization();
+    editor->finalizeInitialization();
+
+    connect(widget->d->m_cursorPositionLabel, &LineColumnLabel::clicked, [editor] {
+        EditorManager::activateEditor(editor, EditorManager::IgnoreNavigationHistory);
+        if (Core::Command *cmd = ActionManager::command(Core::Constants::GOTO)) {
+            if (QAction *act = cmd->action())
+                act->trigger();
+        }
+    });
     return editor;
 }
 

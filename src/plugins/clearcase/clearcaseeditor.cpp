@@ -44,9 +44,7 @@
 using namespace ClearCase;
 using namespace ClearCase::Internal;
 
-ClearCaseEditor::ClearCaseEditor(const VcsBase::VcsBaseEditorParameters *type,
-                                   QWidget *parent) :
-    VcsBase::VcsBaseEditorWidget(type, parent),
+ClearCaseEditorWidget::ClearCaseEditorWidget() :
     m_versionNumberPattern(QLatin1String("[\\\\/]main[\\\\/][^ \t\n\"]*"))
 {
     QTC_ASSERT(m_versionNumberPattern.isValid(), return);
@@ -60,7 +58,7 @@ ClearCaseEditor::ClearCaseEditor(const VcsBase::VcsBaseEditorParameters *type,
     setAnnotateRevisionTextFormat(tr("Annotate version \"%1\""));
 }
 
-QSet<QString> ClearCaseEditor::annotationChanges() const
+QSet<QString> ClearCaseEditorWidget::annotationChanges() const
 {
     QSet<QString> changes;
     QString txt = toPlainText();
@@ -78,7 +76,7 @@ QSet<QString> ClearCaseEditor::annotationChanges() const
     return changes;
 }
 
-QString ClearCaseEditor::changeUnderCursor(const QTextCursor &c) const
+QString ClearCaseEditorWidget::changeUnderCursor(const QTextCursor &c) const
 {
     QTextCursor cursor = c;
     // Any number is regarded as change number.
@@ -93,7 +91,7 @@ QString ClearCaseEditor::changeUnderCursor(const QTextCursor &c) const
     return QString();
 }
 
-VcsBase::BaseAnnotationHighlighter *ClearCaseEditor::createAnnotationHighlighter(const QSet<QString> &changes) const
+VcsBase::BaseAnnotationHighlighter *ClearCaseEditorWidget::createAnnotationHighlighter(const QSet<QString> &changes) const
 {
     return new ClearCaseAnnotationHighlighter(changes);
 }

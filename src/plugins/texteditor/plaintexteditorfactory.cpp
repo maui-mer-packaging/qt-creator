@@ -38,65 +38,46 @@
 
 #include <coreplugin/coreconstants.h>
 #include <coreplugin/infobar.h>
+#include <utils/qtcassert.h>
 
 #include <QCoreApplication>
-#include <QDebug>
 
-using namespace TextEditor;
-using namespace TextEditor::Internal;
+namespace TextEditor {
 
-PlainTextEditorFactory::PlainTextEditorFactory(QObject *parent)
-  : Core::IEditorFactory(parent)
+static PlainTextEditorFactory *m_instance = 0;
+
+class PlainTextEditorWidget : public BaseTextEditorWidget
 {
+public:
+    PlainTextEditorWidget() {}
+    void finalizeInitialization() { setupAsPlainEditor(); }
+};
+
+PlainTextEditorFactory::PlainTextEditorFactory()
+{
+    QTC_CHECK(!m_instance);
+    m_instance = this;
     setId(Core::Constants::K_DEFAULT_TEXT_EDITOR_ID);
     setDisplayName(qApp->translate("OpenWith::Editors", Core::Constants::K_DEFAULT_TEXT_EDITOR_DISPLAY_NAME));
     addMimeType(QLatin1String(TextEditor::Constants::C_TEXTEDITOR_MIMETYPE_TEXT));
 
-    new TextEditorActionHandler(this,
-        Core::Constants::K_DEFAULT_TEXT_EDITOR_ID,
-        TextEditorActionHandler::Format |
+    setDocumentCreator([]() { return new BaseTextDocument(Core::Constants::K_DEFAULT_TEXT_EDITOR_ID); });
+    setEditorWidgetCreator([]() { return new PlainTextEditorWidget; });
+    setIndenterCreator([]() { return new NormalIndenter; });
+
+    setEditorActionHandlers(TextEditorActionHandler::Format |
         TextEditorActionHandler::UnCommentSelection |
         TextEditorActionHandler::UnCollapseAll);
 }
 
-Core::IEditor *PlainTextEditorFactory::createEditor()
+PlainTextEditorFactory *PlainTextEditorFactory::instance()
 {
-    auto doc = new BaseTextDocument;
-    doc->setId(Core::Constants::K_DEFAULT_TEXT_EDITOR_ID);
-    doc->setIndenter(new NormalIndenter);
-    auto widget = new BaseTextEditorWidget(doc, 0);
-    widget->setupAsPlainEditor();
-    TextEditorSettings::initializeEditor(widget);
-    connect(widget, SIGNAL(configured(Core::IEditor*)),
-            this, SLOT(updateEditorInfoBar(Core::IEditor*)));
-    updateEditorInfoBar(widget->editor());
-    return widget->editor();
+    return m_instance;
 }
 
-/*!
- * Test if syntax highlighter is available (or unneeded) for \a editor.
- * If not found, show a warning with a link to the relevant settings page.
- */
-void PlainTextEditorFactory::updateEditorInfoBar(Core::IEditor *editor)
+BaseTextEditor *PlainTextEditorFactory::createPlainTextEditor()
 {
-    BaseTextEditor *textEditor = qobject_cast<BaseTextEditor *>(editor);
-    if (textEditor) {
-        Core::IDocument *file = editor->document();
-        if (!file)
-            return;
-        BaseTextEditorWidget *widget = textEditor->editorWidget();
-        Core::Id infoSyntaxDefinition(Constants::INFO_SYNTAX_DEFINITION);
-        Core::InfoBar *infoBar = file->infoBar();
-        if (!widget->isMissingSyntaxDefinition()) {
-            infoBar->removeInfo(infoSyntaxDefinition);
-        } else if (infoBar->canInfoBeAdded(infoSyntaxDefinition)) {
-            Core::InfoBarEntry info(infoSyntaxDefinition,
-                                    tr("A highlight definition was not found for this file. "
-                                       "Would you like to try to find one?"),
-                                    Core::InfoBarEntry::GlobalSuppressionEnabled);
-            info.setCustomButtonInfo(tr("Show Highlighter Options..."),
-                                     widget, SLOT(acceptMissingSyntaxDefinitionInfo()));
-            infoBar->addInfo(info);
-        }
-    }
+    return qobject_cast<BaseTextEditor *>(m_instance->createEditor());
 }
+
+} // namespace TextEditor

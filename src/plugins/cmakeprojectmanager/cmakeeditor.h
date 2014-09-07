@@ -32,64 +32,31 @@
 
 #include <texteditor/basetextdocument.h>
 #include <texteditor/basetexteditor.h>
-#include <texteditor/codeassist/completionassistprovider.h>
-#include <utils/uncommentselection.h>
-
-
-namespace TextEditor { class FontSettings; }
 
 namespace CMakeProjectManager {
 namespace Internal {
 
 class CMakeEditorWidget;
-class CMakeHighlighter;
-class CMakeManager;
 
 class CMakeEditor : public TextEditor::BaseTextEditor
 {
     Q_OBJECT
 
 public:
-    CMakeEditor(CMakeEditorWidget *);
+    CMakeEditor();
 
-    Core::IEditor *duplicate();
-
+    void finalizeInitialization();
     QString contextHelpId() const;
 
-private slots:
-    void markAsChanged();
-    void build();
+    friend class CMakeEditorWidget;
 };
 
-class CMakeEditorWidget : public TextEditor::BaseTextEditorWidget
+class CMakeEditorFactory : public TextEditor::BaseTextEditorFactory
 {
     Q_OBJECT
 
 public:
-    CMakeEditorWidget(QWidget *parent = 0);
-    CMakeEditorWidget(CMakeEditorWidget *other);
-
-    bool save(const QString &fileName = QString());
-
-    Link findLinkAt(const QTextCursor &cursor, bool resolveTarget = true, bool inNextSplit = false);
-
-protected:
-    TextEditor::BaseTextEditor *createEditor();
-    void contextMenuEvent(QContextMenuEvent *e);
-
-private:
-    CMakeEditorWidget(TextEditor::BaseTextEditorWidget *); // avoid stupidity
-    void ctor();
-};
-
-class CMakeDocument : public TextEditor::BaseTextDocument
-{
-    Q_OBJECT
-
-public:
-    CMakeDocument();
-    QString defaultPath() const;
-    QString suggestedFileName() const;
+    CMakeEditorFactory();
 };
 
 } // namespace Internal

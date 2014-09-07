@@ -69,11 +69,11 @@ public:
                     const QString &logFileId = QString());
     ~Dumper();
 
-    void dumpProjectInfos(const QList<CppTools::CppModelManagerInterface::ProjectInfo> &projectInfos);
+    void dumpProjectInfos(const QList<CppTools::ProjectInfo> &projectInfos);
     void dumpSnapshot(const CPlusPlus::Snapshot &snapshot,
                       const QString &title,
                       bool isGlobalSnapshot = false);
-    void dumpWorkingCopy(const CppTools::CppModelManagerInterface::WorkingCopy &workingCopy);
+    void dumpWorkingCopy(const CppTools::WorkingCopy &workingCopy);
     void dumpMergedEntities(const ProjectPart::HeaderPaths &mergedHeaderPaths,
                             const QByteArray &mergedMacros);
 

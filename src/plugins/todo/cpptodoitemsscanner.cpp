@@ -52,9 +52,9 @@ void CppTodoItemsScanner::keywordListChanged()
 
     CppTools::CppModelManagerInterface *modelManager = CppTools::CppModelManagerInterface::instance();
 
-    QStringList filesToBeUpdated;
-    foreach (const CppTools::CppModelManagerInterface::ProjectInfo &info, modelManager->projectInfos())
-        filesToBeUpdated << info.project().data()->files(ProjectExplorer::Project::ExcludeGeneratedFiles);
+    QSet<QString> filesToBeUpdated;
+    foreach (const CppTools::ProjectInfo &info, modelManager->projectInfos())
+        filesToBeUpdated.unite(info.project().data()->files(ProjectExplorer::Project::ExcludeGeneratedFiles).toSet());
 
     modelManager->updateSourceFiles(filesToBeUpdated);
 }

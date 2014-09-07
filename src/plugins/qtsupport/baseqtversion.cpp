@@ -42,12 +42,14 @@
 #include <projectexplorer/projectexplorer.h>
 #include <projectexplorer/headerpath.h>
 #include <qtsupport/debugginghelperbuildtask.h>
+#include <qtsupport/qtkitinformation.h>
 #include <qtsupport/qtsupportconstants.h>
 
 #include <utils/algorithm.h>
 #include <utils/hostosinfo.h>
 #include <utils/qtcassert.h>
 #include <utils/runextensions.h>
+#include <utils/stringutils.h>
 #include <utils/synchronousprocess.h>
 #include <utils/winutils.h>
 #include <utils/algorithm.h>
@@ -157,6 +159,42 @@ BaseQtVersion::BaseQtVersion(const FileName &qmakeCommand, bool isAutodetected, 
     ctor(qmakeCommand);
 }
 
+BaseQtVersion::BaseQtVersion(const BaseQtVersion &other) :
+    m_id(other.m_id),
+    m_isAutodetected(other.m_isAutodetected),
+    m_hasQmlDump(other.m_hasQmlDump),
+    m_mkspecUpToDate(other.m_mkspecUpToDate),
+    m_mkspecReadUpToDate(other.m_mkspecReadUpToDate),
+    m_defaultConfigIsDebug(other.m_defaultConfigIsDebug),
+    m_defaultConfigIsDebugAndRelease(other.m_defaultConfigIsDebugAndRelease),
+    m_frameworkBuild(other.m_frameworkBuild),
+    m_versionInfoUpToDate(other.m_versionInfoUpToDate),
+    m_installed(other.m_installed),
+    m_hasExamples(other.m_hasExamples),
+    m_hasDemos(other.m_hasDemos),
+    m_hasDocumentation(other.m_hasDocumentation),
+    m_qmakeIsExecutable(other.m_qmakeIsExecutable),
+    m_hasQtAbis(other.m_hasQtAbis),
+    m_configValues(other.m_configValues),
+    m_qtConfigValues(other.m_qtConfigValues),
+    m_unexpandedDisplayName(other.m_unexpandedDisplayName),
+    m_autodetectionSource(other.m_autodetectionSource),
+    m_sourcePath(other.m_sourcePath),
+    m_mkspec(other.m_mkspec),
+    m_mkspecFullPath(other.m_mkspecFullPath),
+    m_mkspecValues(other.m_mkspecValues),
+    m_versionInfo(other.m_versionInfo),
+    m_qmakeCommand(other.m_qmakeCommand),
+    m_qtVersionString(other.m_qtVersionString),
+    m_uicCommand(other.m_uicCommand),
+    m_designerCommand(other.m_designerCommand),
+    m_linguistCommand(other.m_linguistCommand),
+    m_qmlsceneCommand(other.m_qmlsceneCommand),
+    m_qmlviewerCommand(other.m_qmlviewerCommand),
+    m_qtAbis(other.m_qtAbis),
+    m_expander(0)
+{ }
+
 BaseQtVersion::BaseQtVersion()
     :  m_id(-1), m_isAutodetected(false),
     m_hasQmlDump(false),
@@ -189,14 +227,15 @@ void BaseQtVersion::ctor(const FileName &qmakePath)
     m_hasQtAbis = false;
     m_qtVersionString.clear();
     m_sourcePath.clear();
+    m_expander = 0;
 }
 
 BaseQtVersion::~BaseQtVersion()
 {
+    delete m_expander;
 }
 
-QString BaseQtVersion::defaultDisplayName(const QString &versionString, const FileName &qmakePath,
-                                          bool fromPath)
+QString BaseQtVersion::defaultUnexpandedDisplayName(const FileName &qmakePath, bool fromPath)
 {
     QString location;
     if (qmakePath.isEmpty()) {
@@ -222,8 +261,8 @@ QString BaseQtVersion::defaultDisplayName(const QString &versionString, const Fi
     }
 
     return fromPath ?
-        QCoreApplication::translate("QtVersion", "Qt %1 in PATH (%2)").arg(versionString, location) :
-        QCoreApplication::translate("QtVersion", "Qt %1 (%2)").arg(versionString, location);
+        QCoreApplication::translate("QtVersion", "Qt %{Qt:version} in PATH (%2)").arg(location) :
+        QCoreApplication::translate("QtVersion", "Qt %{Qt:version} (%2)").arg(location);
 }
 
 FeatureSet BaseQtVersion::availableFeatures() const
@@ -263,6 +302,12 @@ FeatureSet BaseQtVersion::availableFeatures() const
 
      features |= FeatureSet(Constants::FEATURE_QT_QUICK_2_2);
      features |= FeatureSet(Constants::FEATURE_QT_QUICK_CONTROLS_1_1);
+
+     if (qtVersion() < QtVersionNumber(5, 3, 0))
+         return features;
+
+     features |= FeatureSet(Constants::FEATURE_QT_QUICK_2_3);
+     features |= FeatureSet(Constants::FEATURE_QT_QUICK_CONTROLS_1_2);
 
      return features;
 }
@@ -403,7 +448,7 @@ void BaseQtVersion::fromMap(const QVariantMap &map)
     m_id = map.value(QLatin1String(Constants::QTVERSIONID)).toInt();
     if (m_id == -1) // this happens on adding from installer, see updateFromInstaller => get a new unique id
         m_id = QtVersionManager::getUniqueId();
-    m_displayName = map.value(QLatin1String(Constants::QTVERSIONNAME)).toString();
+    m_unexpandedDisplayName = map.value(QLatin1String(Constants::QTVERSIONNAME)).toString();
     m_isAutodetected = map.value(QLatin1String(QTVERSIONAUTODETECTED)).toBool();
     if (m_isAutodetected)
         m_autodetectionSource = map.value(QLatin1String(QTVERSIONAUTODETECTIONSOURCE)).toString();
@@ -426,7 +471,7 @@ QVariantMap BaseQtVersion::toMap() const
 {
     QVariantMap result;
     result.insert(QLatin1String(Constants::QTVERSIONID), uniqueId());
-    result.insert(QLatin1String(Constants::QTVERSIONNAME), displayName());
+    result.insert(QLatin1String(Constants::QTVERSIONNAME), unexpandedDisplayName());
     result.insert(QLatin1String(QTVERSIONAUTODETECTED), isAutodetected());
     if (isAutodetected())
         result.insert(QLatin1String(QTVERSIONAUTODETECTIONSOURCE), autodetectionSource());
@@ -476,19 +521,6 @@ QStringList BaseQtVersion::warningReason() const
         ret << QCoreApplication::translate("QtVersion", "Non-installed -prefix build - for internal development only.");
     }
     return ret;
-}
-
-ToolChain *BaseQtVersion::preferredToolChain(const FileName &ms) const
-{
-    const FileName spec = ms.isEmpty() ? mkspec() : ms;
-
-    QList<ToolChain *> toolchains = ToolChainManager::toolChains();
-    return Utils::findOr(toolchains,
-                         toolchains.isEmpty() ? 0 : toolchains.first(),
-                         [&spec, this](ToolChain *tc) {
-                                return qtAbis().contains(tc->targetAbi())
-                                         && tc->suggestedMkspecList().contains(spec);
-                          });
 }
 
 FileName BaseQtVersion::qmakeCommand() const
@@ -541,12 +573,17 @@ void BaseQtVersion::setAutoDetectionSource(const QString &autodetectionSource)
 
 QString BaseQtVersion::displayName() const
 {
-    return m_displayName;
+    return Utils::expandMacros(unexpandedDisplayName(), macroExpander());
 }
 
-void BaseQtVersion::setDisplayName(const QString &name)
+QString BaseQtVersion::unexpandedDisplayName() const
 {
-    m_displayName = name;
+    return m_unexpandedDisplayName;
+}
+
+void BaseQtVersion::setUnexpandedDisplayName(const QString &name)
+{
+    m_unexpandedDisplayName = name;
 }
 
 QString BaseQtVersion::toHtml(bool verbose) const
@@ -844,6 +881,11 @@ void BaseQtVersion::parseMkSpec(ProFileEvaluator *evaluator) const
     m_mkspecValues.insert(ns, evaluator->value(ns));
 }
 
+AbstractMacroExpander *BaseQtVersion::createMacroExpander() const
+{
+    return QtKitInformation::createMacroExpander(this);
+}
+
 FileName BaseQtVersion::mkspec() const
 {
     updateMkspec();
@@ -1051,6 +1093,13 @@ QStringList BaseQtVersion::qtConfigValues() const
 {
     ensureMkSpecParsed();
     return m_qtConfigValues;
+}
+
+AbstractMacroExpander *BaseQtVersion::macroExpander() const
+{
+    if (!m_expander)
+        m_expander = createMacroExpander();
+    return m_expander;
 }
 
 QList<HeaderPath> BaseQtVersion::systemHeaderPathes(const Kit *k) const

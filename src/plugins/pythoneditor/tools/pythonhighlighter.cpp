@@ -44,11 +44,10 @@
 #include <texteditor/texteditorconstants.h>
 
 namespace PythonEditor {
-
-using namespace PythonEditor::Internal;
+namespace Internal {
 
 /**
- * @class PyEditor::Highlighter
+ * @class PythonEditor::Internal::PythonHighlighter
  * @brief Handles incremental lexical highlighting, but not semantic
  *
  * Incremental lexical highlighting works every time when any character typed
@@ -65,20 +64,7 @@ using namespace PythonEditor::Internal;
  * @endcode
  */
 
-PythonHighlighter::PythonHighlighter(QTextDocument *parent) :
-    TextEditor::SyntaxHighlighter(parent)
-{
-    init();
-}
-
-/// New instance created when opening any document in editor
-PythonHighlighter::PythonHighlighter(TextEditor::BaseTextDocument *parent) :
-    TextEditor::SyntaxHighlighter(parent)
-{
-    init();
-}
-
-void PythonHighlighter::init()
+PythonHighlighter::PythonHighlighter()
 {
     static QVector<TextEditor::TextStyle> categories;
     if (categories.isEmpty()) {
@@ -98,13 +84,8 @@ void PythonHighlighter::init()
     setTextFormatCategories(categories);
 }
 
-/// Instance destroyed when one of documents closed from editor
-PythonHighlighter::~PythonHighlighter()
-{
-}
-
 /**
- * @brief Highlighter::highlightBlock highlights single line of Python code
+ * @brief PythonHighlighter::highlightBlock highlights single line of Python code
  * @param text is single line without EOLN symbol. Access to all block data
  * can be obtained through inherited currentBlock() function.
  *
@@ -123,11 +104,9 @@ void PythonHighlighter::highlightBlock(const QString &text)
 /**
  * @return True if this keyword is acceptable at start of import line
  */
-static inline
-bool isImportKeyword(const QString &keyword)
+static bool isImportKeyword(const QString &keyword)
 {
-    return (keyword == QLatin1String("import")
-            || keyword == QLatin1String("from"));
+    return keyword == QLatin1String("import") || keyword == QLatin1String("from");
 }
 
 /**
@@ -175,4 +154,5 @@ void PythonHighlighter::highlightImport(Scanner &scanner)
     }
 }
 
+} // namespace Internal
 } // namespace PythonEditor

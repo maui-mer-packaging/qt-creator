@@ -39,7 +39,7 @@
 
 #include <utils/qtcassert.h>
 #include <utils/execmenu.h>
-#include <vcsbase/vcsbaseoutputwindow.h>
+#include <vcsbase/vcsoutputwindow.h>
 #include <coreplugin/documentmanager.h>
 
 #include <QAction>
@@ -49,6 +49,8 @@
 #include <QMenu>
 
 #include <QDebug>
+
+using namespace VcsBase;
 
 namespace Git {
 namespace Internal {
@@ -99,7 +101,7 @@ void BranchDialog::refresh(const QString &repository, bool force)
     m_ui->repositoryLabel->setText(StashDialog::msgRepositoryLabel(m_repository));
     QString errorMessage;
     if (!m_model->refresh(m_repository, &errorMessage))
-        VcsBase::VcsBaseOutputWindow::instance()->appendError(errorMessage);
+        VcsOutputWindow::appendError(errorMessage);
 
     m_ui->branchView->expandAll();
 }
@@ -191,7 +193,7 @@ void BranchDialog::checkout()
     const QString currentBranch = m_model->fullName(m_model->currentBranch());
     const QString nextBranch = m_model->fullName(idx);
     const QString popMessageStart = QCoreApplication::applicationName() +
-            QLatin1String(" ") + nextBranch + QLatin1String("-AutoStash ");
+            QLatin1Char(' ') + nextBranch + QLatin1String("-AutoStash ");
 
     BranchCheckoutDialog branchCheckoutDialog(this, currentBranch, nextBranch);
     GitClient *gitClient = GitPlugin::instance()->gitClient();

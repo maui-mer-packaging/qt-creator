@@ -33,19 +33,19 @@
 #include <extensionsystem/iplugin.h>
 #include <glsl/glsl.h>
 
-namespace GLSLEditor {
+namespace GlslEditor {
 namespace Internal {
 
 class GlslEditorWidget;
 
-class GLSLEditorPlugin : public ExtensionSystem::IPlugin
+class GlslEditorPlugin : public ExtensionSystem::IPlugin
 {
     Q_OBJECT
     Q_PLUGIN_METADATA(IID "org.qt-project.Qt.QtCreatorPlugin" FILE "GLSLEditor.json")
 
 public:
-    GLSLEditorPlugin();
-    ~GLSLEditorPlugin();
+    GlslEditorPlugin();
+    ~GlslEditorPlugin();
 
     // IPlugin
     bool initialize(const QStringList &arguments, QString *errorMessage = 0);
@@ -70,6 +70,6 @@ public:
 };
 
 } // namespace Internal
-} // namespace GLSLEditor
+} // namespace GlslEditor
 
 #endif // GLSLEDITORPLUGIN_H

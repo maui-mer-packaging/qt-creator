@@ -62,9 +62,6 @@ public:
     void extensionsInitialized();
     ShutdownFlag aboutToShutdown();
 
-    // Connect editor to settings changed signals.
-    void initializeEditor(CppEditorWidget *editor);
-
     bool sortedOutline() const;
 
     CppQuickFixAssistProvider *quickFixProvider() const;
@@ -201,13 +198,17 @@ private slots:
     void test_quickfix_ExtractLiteralAsParameter_typeDeduction();
     void test_quickfix_ExtractLiteralAsParameter_freeFunction_separateFiles();
     void test_quickfix_ExtractLiteralAsParameter_memberFunction_separateFiles();
+    void test_quickfix_ExtractLiteralAsParameter_notTriggeringForInvalidCode();
 
     void test_quickfix_InsertVirtualMethods_data();
     void test_quickfix_InsertVirtualMethods();
     void test_quickfix_InsertVirtualMethods_implementationFile();
     void test_quickfix_InsertVirtualMethods_BaseClassInNamespace();
 
-    // tests for "Include Hiererchy"
+    void test_useSelections_data();
+    void test_useSelections();
+
+    // tests for "Include Hierarchy"
     void test_includehierarchy_data();
     void test_includehierarchy();
 
@@ -244,19 +245,6 @@ private:
     QPointer<CppCodeModelInspectorDialog> m_cppCodeModelInspectorDialog;
 
     QPointer<TextEditor::BaseTextEditor> m_currentEditor;
-};
-
-class CppEditorFactory : public Core::IEditorFactory
-{
-    Q_OBJECT
-
-public:
-    CppEditorFactory(CppEditorPlugin *owner);
-
-    Core::IEditor *createEditor();
-
-private:
-    CppEditorPlugin *m_owner;
 };
 
 } // namespace Internal

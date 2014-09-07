@@ -4,20 +4,7 @@ include(../../qtcreatorplugin.pri)
 include(../../shared/designerintegrationv2/designerintegration.pri)
 include(cpp/cpp.pri)
 
-greaterThan(QT_MAJOR_VERSION, 4) {
-    QT += printsupport designer designercomponents-private
-} else {
-    # -- figure out shared dir location
-    !exists($$[QT_INSTALL_HEADERS]/QtDesigner/private/qdesigner_integration_p.h) {
-        QT_SOURCE_TREE=$$fromfile($$(QTDIR)/.qmake.cache,QT_SOURCE_TREE)
-        INCLUDEPATH += $$QT_SOURCE_TREE/include
-    }
-    INCLUDEPATH += $$QMAKE_INCDIR_QT/QtDesigner
-    qtAddLibrary(QtDesigner)
-    qtAddLibrary(QtDesignerComponents)
-}
-
-QT += xml
+QT += printsupport designer designercomponents-private xml
 
 HEADERS += formeditorplugin.h \
         formeditorfactory.h \
@@ -38,8 +25,7 @@ HEADERS += formeditorplugin.h \
     formeditorstack.h \
     editordata.h \
     resourcehandler.h \
-    qtdesignerformclasscodegenerator.h \
-    designerxmleditorwidget.h
+    qtdesignerformclasscodegenerator.h
 
 SOURCES += formeditorplugin.cpp \
         formeditorfactory.cpp \
@@ -57,8 +43,7 @@ SOURCES += formeditorplugin.cpp \
     designercontext.cpp \
     formeditorstack.cpp \
     resourcehandler.cpp \
-    qtdesignerformclasscodegenerator.cpp \
-    designerxmleditorwidget.cpp
+    qtdesignerformclasscodegenerator.cpp
 
 equals(TEST, 1) {
     SOURCES += gotoslot_test.cpp

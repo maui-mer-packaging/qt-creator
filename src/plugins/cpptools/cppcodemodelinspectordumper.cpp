@@ -29,6 +29,8 @@
 
 #include "cppcodemodelinspectordumper.h"
 
+#include "cppworkingcopy.h"
+
 #include <app/app_version.h>
 #include <coreplugin/icore.h>
 #include <cpptools/cppprojectfile.h>
@@ -151,7 +153,7 @@ QString Utils::toString(const QList<ProjectFile> &projectFiles)
     foreach (const ProjectFile &projectFile, projectFiles)
         filesList << QDir::toNativeSeparators(projectFile.path);
     ::Utils::sort(filesList);
-    return filesList.join(QLatin1String("\n"));
+    return filesList.join(QLatin1Char('\n'));
 }
 
 QString Utils::toString(ProjectFile::Kind kind)
@@ -410,7 +412,7 @@ QString Utils::pathListToString(const QStringList &pathList)
     QStringList result;
     foreach (const QString &path, pathList)
         result << QDir::toNativeSeparators(path);
-    return result.join(QLatin1String("\n"));
+    return result.join(QLatin1Char('\n'));
 }
 
 QString Utils::pathListToString(const ProjectPart::HeaderPaths &pathList)
@@ -422,7 +424,7 @@ QString Utils::pathListToString(const ProjectPart::HeaderPaths &pathList)
                       path.isFrameworkPath() ? QLatin1String("framework") : QLatin1String("include")
                       );
     }
-    return result.join(QLatin1String("\n"));
+    return result.join(QLatin1Char('\n'));
 }
 
 QList<CPlusPlus::Document::Ptr> Utils::snapshotToList(const CPlusPlus::Snapshot &snapshot)
@@ -470,7 +472,7 @@ Dumper::~Dumper()
     m_out << "*** END Code Model Inspection Report\n";
 }
 
-void Dumper::dumpProjectInfos( const QList<CppModelManagerInterface::ProjectInfo> &projectInfos)
+void Dumper::dumpProjectInfos( const QList<ProjectInfo> &projectInfos)
 {
     const QByteArray i1 = indent(1);
     const QByteArray i2 = indent(2);
@@ -478,7 +480,7 @@ void Dumper::dumpProjectInfos( const QList<CppModelManagerInterface::ProjectInfo
     const QByteArray i4 = indent(4);
 
     m_out << "Projects loaded: " << projectInfos.size() << "{{{1\n";
-    foreach (const CppModelManagerInterface::ProjectInfo &info, projectInfos) {
+    foreach (const ProjectInfo &info, projectInfos) {
         const QPointer<ProjectExplorer::Project> project = info.project();
         m_out << i1 << "Project " << project->displayName()
               << " (" << project->projectFilePath().toUserOutput() << "){{{2\n";
@@ -578,7 +580,7 @@ void Dumper::dumpSnapshot(const CPlusPlus::Snapshot &snapshot, const QString &ti
     }
 }
 
-void Dumper::dumpWorkingCopy(const CppModelManagerInterface::WorkingCopy &workingCopy)
+void Dumper::dumpWorkingCopy(const WorkingCopy &workingCopy)
 {
     m_out << "Working Copy contains " << workingCopy.size() << " entries{{{1\n";
 

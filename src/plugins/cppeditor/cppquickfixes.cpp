@@ -30,6 +30,7 @@
 #include "cppquickfixes.h"
 
 #include "cppeditor.h"
+#include "cppeditordocument.h"
 #include "cppfunctiondecldeflink.h"
 #include "cppquickfixassistant.h"
 #include "cppvirtualfunctionassistprovider.h"
@@ -69,13 +70,14 @@
 #include <cctype>
 
 using namespace CPlusPlus;
-using namespace CppEditor;
-using namespace CppEditor::Internal;
 using namespace CppTools;
 using namespace TextEditor;
 using Utils::ChangeSet;
 
-void CppEditor::Internal::registerQuickFixes(ExtensionSystem::IPlugin *plugIn)
+namespace CppEditor {
+namespace Internal {
+
+void registerQuickFixes(ExtensionSystem::IPlugin *plugIn)
 {
     plugIn->addAutoReleasedObject(new AddIncludeForUndefinedIdentifier);
     plugIn->addAutoReleasedObject(new AddIncludeForForwardDeclaration);
@@ -1903,9 +1905,9 @@ void AddIncludeForUndefinedIdentifier::match(const CppQuickFixInterface &interfa
     // find the include paths
     ProjectPart::HeaderPaths headerPaths;
     CppModelManagerInterface *modelManager = CppModelManagerInterface::instance();
-    QList<CppModelManagerInterface::ProjectInfo> projectInfos = modelManager->projectInfos();
+    QList<ProjectInfo> projectInfos = modelManager->projectInfos();
     bool inProject = false;
-    foreach (const CppModelManagerInterface::ProjectInfo &info, projectInfos) {
+    foreach (const ProjectInfo &info, projectInfos) {
         foreach (ProjectPart::Ptr part, info.projectParts()) {
             foreach (const ProjectFile &file, part->files) {
                 if (file.path == doc->fileName()) {
@@ -3163,7 +3165,7 @@ public:
         if (m_funcReturn) {
             funcDef.append(QLatin1String("\nreturn ")
                         + m_relevantDecls.at(0).first
-                        + QLatin1String(";"));
+                        + QLatin1Char(';'));
             funcCall.prepend(m_relevantDecls.at(0).second + QLatin1String(" = "));
         }
         funcDef.append(QLatin1String("\n}\n\n"));
@@ -3889,13 +3891,15 @@ void ExtractLiteralAsParameter::match(const CppQuickFixInterface &interface,
             return;
     }
 
-    FunctionDeclaratorAST *functionDeclarator
-            = function->declarator->postfix_declarator_list->value->asFunctionDeclarator();
-    if (functionDeclarator
-            && functionDeclarator->parameter_declaration_clause
-            && functionDeclarator->parameter_declaration_clause->dot_dot_dot_token) {
-        // Do not handle functions with ellipsis parameter.
+    PostfixDeclaratorListAST * const declaratorList = function->declarator->postfix_declarator_list;
+    if (!declaratorList)
         return;
+    if (FunctionDeclaratorAST *declarator = declaratorList->value->asFunctionDeclarator()) {
+        if (declarator->parameter_declaration_clause
+                && declarator->parameter_declaration_clause->dot_dot_dot_token) {
+            // Do not handle functions with ellipsis parameter.
+            return;
+        }
     }
 
     const int priority = path.size() - 1;
@@ -4150,15 +4154,25 @@ void ConvertFromAndToPointer::match(const CppQuickFixInterface &interface,
         return;
     SimpleDeclarationAST *simpleDeclaration = 0;
     DeclaratorAST *declarator = 0;
+    bool isFunctionLocal = false;
+    bool isClassLocal = false;
     ConvertFromAndToPointerOp::Mode mode = ConvertFromAndToPointerOp::FromVariable;
     for (int i = path.count() - 2; i >= 0; --i) {
         AST *ast = path.at(i);
         if (!declarator && (declarator = ast->asDeclarator()))
             continue;
-        else if (!simpleDeclaration && (simpleDeclaration = ast->asSimpleDeclaration()))
+        if (!simpleDeclaration && (simpleDeclaration = ast->asSimpleDeclaration()))
             continue;
+        if (declarator && simpleDeclaration) {
+            if (ast->asClassSpecifier()) {
+                isClassLocal = true;
+            } else if (ast->asFunctionDefinition() && !isClassLocal) {
+                isFunctionLocal = true;
+                break;
+            }
+        }
     }
-    if (!simpleDeclaration || !declarator)
+    if (!isFunctionLocal || !simpleDeclaration || !declarator)
         return;
 
     Symbol *symbol = 0;
@@ -4523,7 +4537,7 @@ public:
         } else {
             QString textFuncDecl = fromFile->textOf(m_funcDef);
             textFuncDecl.truncate(startPosition - fromFile->startOf(m_funcDef));
-            textFuncDecl = textFuncDecl.trimmed() + QLatin1String(";");
+            textFuncDecl = textFuncDecl.trimmed() + QLatin1Char(';');
             headerTarget.replace(fromFile->range(m_funcDef), textFuncDecl);
         }
         fromFile->setChangeSet(headerTarget);
@@ -5329,3 +5343,6 @@ void EscapeStringLiteral::match(const CppQuickFixInterface &interface, QuickFixO
         result.append(op);
     }
 }
+
+} // namespace Internal
+} // namespace CppEditor

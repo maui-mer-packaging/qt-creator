@@ -113,8 +113,6 @@ NavigatorTreeModel::NavigatorTreeModel(QObject *parent)
     setColumnCount(2);
 #    endif
 
-    setSupportedDragActions(Qt::LinkAction);
-
     connect(this, SIGNAL(itemChanged(QStandardItem*)),
             this, SLOT(handleChangedItem(QStandardItem*)));
 }
@@ -126,6 +124,11 @@ NavigatorTreeModel::~NavigatorTreeModel()
 Qt::DropActions NavigatorTreeModel::supportedDropActions() const
 {
     return Qt::LinkAction | Qt::MoveAction;
+}
+
+Qt::DropActions NavigatorTreeModel::supportedDragActions() const
+{
+    return Qt::LinkAction;
 }
 
 QStringList NavigatorTreeModel::mimeTypes() const
@@ -718,7 +721,7 @@ void NavigatorTreeModel::handleItemLibraryItemDrop(const QMimeData *mimeData, in
 
     if (foundTarget) {
         ItemLibraryEntry itemLibraryEntry = itemLibraryEntryFromData(mimeData->data("application/vnd.bauhaus.itemlibraryinfo"));
-        QmlItemNode newQmlItemNode = QmlItemNode::createQmlItemNode(m_view, itemLibraryEntry, QPointF(0., 0.), targetProperty);
+        QmlItemNode newQmlItemNode = QmlItemNode::createQmlItemNode(m_view, itemLibraryEntry, QPointF(), targetProperty);
 
         if (newQmlItemNode.isValid() && targetProperty.isNodeListProperty()) {
             QList<ModelNode> newModelNodeList;
@@ -739,7 +742,7 @@ void NavigatorTreeModel::handleItemLibraryImageDrop(const QMimeData *mimeData, i
 
     if (foundTarget) {
         QString imageFileName = QString::fromUtf8(mimeData->data("application/vnd.bauhaus.libraryresource"));
-        QmlItemNode newQmlItemNode = QmlItemNode::createQmlItemNodeFromImage(m_view, imageFileName, QPointF(0., 0.), targetProperty);
+        QmlItemNode newQmlItemNode = QmlItemNode::createQmlItemNodeFromImage(m_view, imageFileName, QPointF(), targetProperty);
 
         if (newQmlItemNode.isValid()) {
             QList<ModelNode> newModelNodeList;

@@ -27,10 +27,11 @@
 **
 ****************************************************************************/
 
+#include "builtineditordocumentparser.h"
 #include "cppsourceprocessor.h"
-#include "cpptoolseditorsupport.h"
 #include "cpptoolsplugin.h"
 #include "cpptoolstestcase.h"
+#include "editordocumenthandle.h"
 #include "modelmanagertesthelper.h"
 
 #include <coreplugin/editormanager/editormanager.h>
@@ -45,17 +46,11 @@
 #include <QFileInfo>
 #include <QtTest>
 
-#if  QT_VERSION >= 0x050000
-#define MSKIP_SINGLE(x) QSKIP(x)
-#else
-#define MSKIP_SINGLE(x) QSKIP(x, SkipSingle)
-#endif
-
 using namespace CppTools::Internal;
 using namespace ProjectExplorer;
 
 typedef CPlusPlus::Document Document;
-typedef CppTools::CppModelManagerInterface::ProjectInfo ProjectInfo;
+typedef CppTools::ProjectInfo ProjectInfo;
 typedef CppTools::ProjectPart ProjectPart;
 typedef CppTools::ProjectFile ProjectFile;
 
@@ -199,7 +194,7 @@ private:
     const QString &m_filePath;
 };
 
-static QStringList updateProjectInfo(CppModelManager *modelManager, ModelManagerTestHelper *helper,
+static QSet<QString> updateProjectInfo(CppModelManager *modelManager, ModelManagerTestHelper *helper,
                                      const ProjectInfo &projectInfo)
 {
     helper->resetRefreshedSourceFiles();
@@ -246,7 +241,7 @@ void CppToolsPlugin::test_modelmanager_paths_are_clean()
 void CppToolsPlugin::test_modelmanager_framework_headers()
 {
     if (Utils::HostOsInfo::isWindowsHost())
-        MSKIP_SINGLE("Can't resolve framework soft links on Windows.");
+        QSKIP("Can't resolve framework soft links on Windows.");
 
     ModelManagerTestHelper helper;
     CppModelManager *mm = CppModelManager::instance();
@@ -320,7 +315,7 @@ void CppToolsPlugin::test_modelmanager_refresh_also_includes_of_project_files()
     part->files.append(ProjectFile(testCpp, ProjectFile::CXXSource));
     pi.appendProjectPart(part);
 
-    QStringList refreshedFiles = updateProjectInfo(mm, &helper, pi);
+    QSet<QString> refreshedFiles = updateProjectInfo(mm, &helper, pi);
     QCOMPARE(refreshedFiles.size(), 1);
     QVERIFY(refreshedFiles.contains(testCpp));
     CPlusPlus::Snapshot snapshot = mm->snapshot();
@@ -380,7 +375,7 @@ void CppToolsPlugin::test_modelmanager_refresh_several_times()
     mm->updateProjectInfo(pi);
 
     CPlusPlus::Snapshot snapshot;
-    QStringList refreshedFiles;
+    QSet<QString> refreshedFiles;
     CPlusPlus::Document::Ptr document;
 
     QByteArray defines = "#define FIRST_DEFINE";
@@ -446,7 +441,7 @@ void CppToolsPlugin::test_modelmanager_refresh_test_for_changes()
     QFuture<void> firstFuture = mm->updateProjectInfo(pi);
     QVERIFY(firstFuture.isStarted() || firstFuture.isRunning());
     firstFuture.waitForFinished();
-    const QStringList refreshedFiles = helper.waitForRefreshedSourceFiles();
+    const QSet<QString> refreshedFiles = helper.waitForRefreshedSourceFiles();
     QCOMPARE(refreshedFiles.size(), 1);
     QVERIFY(refreshedFiles.contains(testCpp));
 
@@ -480,7 +475,7 @@ void CppToolsPlugin::test_modelmanager_refresh_added_and_purge_removed()
     pi.appendProjectPart(part);
 
     CPlusPlus::Snapshot snapshot;
-    QStringList refreshedFiles;
+    QSet<QString> refreshedFiles;
 
     refreshedFiles = updateProjectInfo(mm, &helper, pi);
 
@@ -538,7 +533,7 @@ void CppToolsPlugin::test_modelmanager_refresh_timeStampModified_if_sourcefiles_
 
     Document::Ptr document;
     CPlusPlus::Snapshot snapshot;
-    QStringList refreshedFiles;
+    QSet<QString> refreshedFiles;
 
     refreshedFiles = updateProjectInfo(mm, &helper, pi);
 
@@ -613,7 +608,7 @@ void CppToolsPlugin::test_modelmanager_refresh_timeStampModified_if_sourcefiles_
 ///        files of the first project.
 void CppToolsPlugin::test_modelmanager_snapshot_after_two_projects()
 {
-    QStringList refreshedFiles;
+    QSet<QString> refreshedFiles;
     ModelManagerTestHelper helper;
     ProjectCreator project1(&helper);
     ProjectCreator project2(&helper);
@@ -627,7 +622,7 @@ void CppToolsPlugin::test_modelmanager_snapshot_after_two_projects()
                                   << _("main.cpp"));
 
     refreshedFiles = updateProjectInfo(mm, &helper, project1.projectInfo);
-    QCOMPARE(refreshedFiles.toSet(), project1.projectFiles.toSet());
+    QCOMPARE(refreshedFiles, project1.projectFiles.toSet());
     const int snapshotSizeAfterProject1 = mm->snapshot().size();
 
     foreach (const QString &file, project1.projectFiles)
@@ -641,7 +636,7 @@ void CppToolsPlugin::test_modelmanager_snapshot_after_two_projects()
                                   << _("main.cpp"));
 
     refreshedFiles = updateProjectInfo(mm, &helper, project2.projectInfo);
-    QCOMPARE(refreshedFiles.toSet(), project2.projectFiles.toSet());
+    QCOMPARE(refreshedFiles, project2.projectFiles.toSet());
 
     const int snapshotSizeAfterProject2 = mm->snapshot().size();
     QVERIFY(snapshotSizeAfterProject2 > snapshotSizeAfterProject1);
@@ -672,7 +667,7 @@ void CppToolsPlugin::test_modelmanager_extraeditorsupport_uiFiles()
     // Check working copy.
     // An AbstractEditorSupport object should have been added for the ui_* file.
     CppModelManagerInterface *mm = CppModelManagerInterface::instance();
-    CppModelManagerInterface::WorkingCopy workingCopy = mm->workingCopy();
+    WorkingCopy workingCopy = mm->workingCopy();
 
     QCOMPARE(workingCopy.size(), 2); // mm->configurationFileName() and "ui_*.h"
 
@@ -865,10 +860,10 @@ void CppToolsPlugin::test_modelmanager_defines_per_project()
         QCOMPARE(Core::DocumentModel::openedDocuments().size(), 1);
         QVERIFY(mm->isCppEditor(editor));
 
-        CppEditorSupport *sup = mm->cppEditorSupport(
-                    qobject_cast<TextEditor::BaseTextEditor *>(editor));
-        while (sup->lastSemanticInfoDocument().isNull())
-            QCoreApplication::processEvents();
+//        CppEditorSupport *sup = mm->cppEditorSupport(
+//                    qobject_cast<TextEditor::BaseTextEditor *>(editor));
+//        while (sup->lastSemanticInfoDocument().isNull())
+//            QCoreApplication::processEvents();
 
         Document::Ptr doc = mm->document(fileName);
         QCOMPARE(nameOfFirstDeclaration(doc), firstDeclarationName);
@@ -942,21 +937,16 @@ void CppToolsPlugin::test_modelmanager_precompiled_headers()
         QCOMPARE(Core::DocumentModel::openedDocuments().size(), 1);
         QVERIFY(mm->isCppEditor(editor));
 
-        CppEditorSupport *sup = mm->cppEditorSupport(
-                    qobject_cast<TextEditor::BaseTextEditor *>(editor));
-        while (sup->lastSemanticInfoDocument().isNull())
-            QCoreApplication::processEvents();
-
-        const QSharedPointer<SnapshotUpdater> updater = sup->snapshotUpdater();
-        updater->setUsePrecompiledHeaders(true);
-        updater->update(mm->workingCopy());
+        BuiltinEditorDocumentParser *parser = BuiltinEditorDocumentParser::get(fileName);
+        parser->setUsePrecompiledHeaders(true);
+        parser->update(mm->workingCopy());
 
         // Check if defines from pch are considered
         Document::Ptr document = mm->document(fileName);
         QCOMPARE(nameOfFirstDeclaration(document), firstDeclarationName);
 
         // Check if declarations from pch are considered
-        CPlusPlus::LookupContext context(document, updater->snapshot());
+        CPlusPlus::LookupContext context(document, parser->snapshot());
         const CPlusPlus::Identifier *identifier
             = document->control()->identifier(firstClassInPchFile.data());
         const QList<CPlusPlus::LookupItem> results = context.lookup(identifier,
@@ -1026,13 +1016,10 @@ void CppToolsPlugin::test_modelmanager_defines_per_editor()
         QCOMPARE(Core::DocumentModel::openedDocuments().size(), 1);
         QVERIFY(mm->isCppEditor(editor));
 
-        CppEditorSupport *sup = mm->cppEditorSupport(
-                    qobject_cast<TextEditor::BaseTextEditor *>(editor));
-        while (sup->lastSemanticInfoDocument().isNull())
-            QCoreApplication::processEvents();
-
-        sup->snapshotUpdater()->setEditorDefines(editorDefines.toUtf8());
-        sup->snapshotUpdater()->update(mm->workingCopy());
+        const QString filePath = editor->document()->filePath();
+        BaseEditorDocumentParser *parser = BaseEditorDocumentParser::get(filePath);
+        parser->setEditorDefines(editorDefines.toUtf8());
+        parser->update(mm->workingCopy());
 
         Document::Ptr doc = mm->document(main1File);
         QCOMPARE(nameOfFirstDeclaration(doc), firstDeclarationName);

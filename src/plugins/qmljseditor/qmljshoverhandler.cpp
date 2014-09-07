@@ -29,8 +29,8 @@
 
 #include "qmljshoverhandler.h"
 #include "qmljseditor.h"
+#include "qmljseditorconstants.h"
 #include "qmljseditordocument.h"
-#include "qmljseditoreditable.h"
 #include "qmlexpressionundercursor.h"
 
 #include <coreplugin/editormanager/ieditor.h>
@@ -98,10 +98,7 @@ HoverHandler::HoverHandler(QObject *parent) : BaseHoverHandler(parent), m_modelM
 
 bool HoverHandler::acceptEditor(IEditor *editor)
 {
-    QmlJSEditor *qmlEditor = qobject_cast<QmlJSEditor *>(editor);
-    if (qmlEditor)
-        return true;
-    return false;
+    return editor->context().contains(Constants::C_QMLJSEDITOR_ID);
 }
 
 static inline QString getModuleName(const ScopeChain &scopeChain, const Document::Ptr &qmlDocument,
@@ -159,13 +156,13 @@ bool HoverHandler::setQmlTypeHelp(const ScopeChain &scopeChain, const Document::
         QStringList helpIdPieces(qName);
         helpIdPieces.prepend(moduleName);
         helpIdPieces.prepend(QLatin1String("QML"));
-        helpId = helpIdPieces.join(QLatin1String("."));
+        helpId = helpIdPieces.join(QLatin1Char('.'));
         if (!HelpManager::linksForIdentifier(helpId).isEmpty())
             break;
         if (helpIdPieces.size() > 3) {
             QString lm = helpIdPieces.value(2);
             helpIdPieces.removeAt(2);
-            helpId = helpIdPieces.join(QLatin1String("."));
+            helpId = helpIdPieces.join(QLatin1Char('.'));
             if (!HelpManager::linksForIdentifier(helpId).isEmpty())
                 break;
             helpIdPieces.replace(1, lm);
@@ -173,12 +170,12 @@ bool HoverHandler::setQmlTypeHelp(const ScopeChain &scopeChain, const Document::
                 break;
         }
         helpIdPieces.removeAt(1);
-        helpId = helpIdPieces.join(QLatin1String("."));
+        helpId = helpIdPieces.join(QLatin1Char('.'));
         if (!HelpManager::linksForIdentifier(helpId).isEmpty())
             break;
         return false;
     } while (0);
-    setLastHelpItemIdentified(TextEditor::HelpItem(helpId, qName.join(QLatin1String(".")),
+    setLastHelpItemIdentified(TextEditor::HelpItem(helpId, qName.join(QLatin1Char('.')),
                                                    TextEditor::HelpItem::QmlComponent));
     return true;
 }
@@ -190,7 +187,7 @@ void HoverHandler::identifyMatch(TextEditor::BaseTextEditor *editor, int pos)
     if (!m_modelManager)
         return;
 
-    QmlJSTextEditorWidget *qmlEditor = qobject_cast<QmlJSTextEditorWidget *>(editor->widget());
+    QmlJSEditorWidget *qmlEditor = qobject_cast<QmlJSEditorWidget *>(editor->widget());
     if (!qmlEditor)
         return;
 
@@ -257,7 +254,7 @@ void HoverHandler::identifyMatch(TextEditor::BaseTextEditor *editor, int pos)
     setQmlHelpItem(scopeChain, qmlDocument, node);
 }
 
-bool HoverHandler::matchDiagnosticMessage(QmlJSTextEditorWidget *qmlEditor, int pos)
+bool HoverHandler::matchDiagnosticMessage(QmlJSEditorWidget *qmlEditor, int pos)
 {
     foreach (const QTextEdit::ExtraSelection &sel,
              qmlEditor->extraSelections(TextEditor::BaseTextEditorWidget::CodeWarningsSelection)) {

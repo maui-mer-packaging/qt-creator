@@ -352,28 +352,40 @@ DeviceKitInformation::DeviceKitInformation()
 QVariant DeviceKitInformation::defaultValue(Kit *k) const
 {
     Core::Id type = DeviceTypeKitInformation::deviceTypeId(k);
+    // Use default device if that is compatible:
     IDevice::ConstPtr dev = DeviceManager::instance()->defaultDevice(type);
-    return dev.isNull() ? QString() : dev->id().toString();
+    if (dev && dev->isCompatibleWith(k))
+        return dev->id().toString();
+    // Use any other device that is compatible:
+    for (int i = 0; i < DeviceManager::instance()->deviceCount(); ++i) {
+        dev = DeviceManager::instance()->deviceAt(i);
+        if (dev && dev->isCompatibleWith(k))
+            return dev->id().toString();
+    }
+    // Fail: No device set up.
+    return QString();
 }
 
 QList<Task> DeviceKitInformation::validate(const Kit *k) const
 {
     IDevice::ConstPtr dev = DeviceKitInformation::device(k);
     QList<Task> result;
-    if (!dev.isNull() && dev->type() != DeviceTypeKitInformation::deviceTypeId(k))
-        result.append(Task(Task::Error, tr("Device does not match device type."),
-                           Utils::FileName(), -1, Core::Id(Constants::TASK_CATEGORY_BUILDSYSTEM)));
     if (dev.isNull())
         result.append(Task(Task::Warning, tr("No device set."),
                            Utils::FileName(), -1, Core::Id(Constants::TASK_CATEGORY_BUILDSYSTEM)));
+    else if (!dev->isCompatibleWith(k))
+        result.append(Task(Task::Error, tr("Device is incompatible with this kit."),
+                           Utils::FileName(), -1, Core::Id(Constants::TASK_CATEGORY_BUILDSYSTEM)));
+
     return result;
 }
 
 void DeviceKitInformation::fix(Kit *k)
 {
     IDevice::ConstPtr dev = DeviceKitInformation::device(k);
-    if (!dev.isNull() && dev->type() != DeviceTypeKitInformation::deviceTypeId(k)) {
-        qWarning("Device is no longer known, removing from kit \"%s\".", qPrintable(k->displayName()));
+    if (!dev.isNull() && !dev->isCompatibleWith(k)) {
+        qWarning("Device is no longer compatible with kit \"%s\", removing it.",
+                 qPrintable(k->displayName()));
         setDeviceId(k, Core::Id());
     }
 }
@@ -382,7 +394,7 @@ void DeviceKitInformation::setup(Kit *k)
 {
     QTC_ASSERT(DeviceManager::instance()->isLoaded(), return);
     IDevice::ConstPtr dev = DeviceKitInformation::device(k);
-    if (!dev.isNull() && dev->type() == DeviceTypeKitInformation::deviceTypeId(k))
+    if (!dev.isNull() && dev->isCompatibleWith(k))
         return;
 
     setDeviceId(k, Core::Id::fromSetting(defaultValue(k)));
@@ -465,6 +477,83 @@ void DeviceKitInformation::devicesChanged()
 {
     foreach (Kit *k, KitManager::kits())
         setup(k); // Set default device if necessary
+}
+
+// --------------------------------------------------------------------------
+// EnvironmentKitInformation:
+// --------------------------------------------------------------------------
+
+EnvironmentKitInformation::EnvironmentKitInformation()
+{
+    setObjectName(QLatin1String("EnvironmentKitInformation"));
+    setId(EnvironmentKitInformation::id());
+    setPriority(29000);
+}
+
+QVariant EnvironmentKitInformation::defaultValue(Kit *k) const
+{
+    Q_UNUSED(k)
+    return QStringList();
+}
+
+QList<Task> EnvironmentKitInformation::validate(const Kit *k) const
+{
+    QList<Task> result;
+    const QVariant variant = k->value(EnvironmentKitInformation::id());
+    if (!variant.isNull() && !variant.canConvert(QVariant::List)) {
+        result.append(Task(Task::Error, tr("The environment setting value is invalid."),
+                           Utils::FileName(), -1, Core::Id(Constants::TASK_CATEGORY_BUILDSYSTEM)));
+    }
+    return result;
+}
+
+void EnvironmentKitInformation::fix(Kit *k)
+{
+    const QVariant variant = k->value(EnvironmentKitInformation::id());
+    if (!variant.isNull() && !variant.canConvert(QVariant::List)) {
+        qWarning("Kit \"%s\" has a wrong environment value set.", qPrintable(k->displayName()));
+        setEnvironmentChanges(k, QList<Utils::EnvironmentItem>());
+    }
+}
+
+void EnvironmentKitInformation::addToEnvironment(const Kit *k, Utils::Environment &env) const
+{
+    const QVariant envValue = k->value(EnvironmentKitInformation::id());
+    if (envValue.isValid())
+        env.modify(Utils::EnvironmentItem::fromStringList(envValue.toStringList()));
+}
+
+KitConfigWidget *EnvironmentKitInformation::createConfigWidget(Kit *k) const
+{
+    return new Internal::KitEnvironmentConfigWidget(k, this);
+}
+
+KitInformation::ItemList EnvironmentKitInformation::toUserOutput(const Kit *k) const
+{
+    ItemList retVal;
+    QVariant envValue = k->value(EnvironmentKitInformation::id());
+    if (envValue.isValid())
+        retVal << qMakePair(QLatin1Literal("Environment"), envValue.toStringList().join(QLatin1Literal("\n")));
+
+    return retVal;
+}
+
+Core::Id EnvironmentKitInformation::id()
+{
+    return "PE.Profile.Environment";
+}
+
+QList<Utils::EnvironmentItem> EnvironmentKitInformation::environmentChanges(const Kit *k)
+{
+     if (k)
+         return Utils::EnvironmentItem::fromStringList(k->value(EnvironmentKitInformation::id()).toStringList());
+     return QList<Utils::EnvironmentItem>();
+}
+
+void EnvironmentKitInformation::setEnvironmentChanges(Kit *k, const QList<Utils::EnvironmentItem> &changes)
+{
+    if (k)
+        k->setValue(EnvironmentKitInformation::id(), Utils::EnvironmentItem::toStringList(changes));
 }
 
 } // namespace ProjectExplorer

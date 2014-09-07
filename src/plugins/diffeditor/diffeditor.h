@@ -55,15 +55,14 @@ class UnifiedDiffEditorWidget;
 class DIFFEDITOR_EXPORT DiffEditor : public Core::IEditor
 {
     Q_OBJECT
+
 public:
-    DiffEditor();
-    DiffEditor(DiffEditor *other);
-    virtual ~DiffEditor();
+    DiffEditor(const QSharedPointer<DiffEditorDocument> &doc);
+    ~DiffEditor();
 
 public:
     DiffEditorController *controller() const;
 
-    // Core::IEditor
     Core::IEditor *duplicate();
 
     bool open(QString *errorString,
@@ -87,7 +86,6 @@ private slots:
     void slotDiffEditorSwitched();
 
 private:
-    void ctor();
     void updateEntryToolTip();
     void showDiffEditor(QWidget *newEditor);
     void updateDiffEditorSwitcher();

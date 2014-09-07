@@ -29,6 +29,7 @@
 
 #include "formwindowfile.h"
 #include "designerconstants.h"
+#include "resourcehandler.h"
 
 #include <utils/qtcassert.h>
 
@@ -36,14 +37,8 @@
 #include <QDesignerFormWindowInterface>
 #include <QDesignerFormWindowManagerInterface>
 #include <QDesignerFormEditorInterface>
-#if QT_VERSION < 0x050000
-#    include "qt_private/qsimpleresource_p.h"
-#    include "qt_private/formwindowbase_p.h"
-#endif
-
 #include <QTextDocument>
 #include <QUndoStack>
-
 #include <QFileInfo>
 #include <QDebug>
 #include <QTextCodec>
@@ -66,6 +61,10 @@ FormWindowFile::FormWindowFile(QDesignerFormWindowInterface *form, QObject *pare
     connect(m_formWindow->commandHistory(), SIGNAL(indexChanged(int)),
             this, SLOT(setShouldAutoSave()));
     connect(m_formWindow, SIGNAL(changed()), SLOT(updateIsModified()));
+
+    m_resourceHandler = new ResourceHandler(form);
+    connect(this, SIGNAL(filePathChanged(QString,QString)),
+            m_resourceHandler, SLOT(updateResources()));
 }
 
 bool FormWindowFile::save(QString *errorString, const QString &name, bool autoSave)
@@ -84,13 +83,7 @@ bool FormWindowFile::save(QString *errorString, const QString &name, bool autoSa
     const QString oldFormName = m_formWindow->fileName();
     if (!autoSave)
         m_formWindow->setFileName(fi.absoluteFilePath());
-#if QT_VERSION >= 0x050000
     const bool writeOK = writeFile(actualName, errorString);
-#else
-    const bool warningsEnabled = qdesigner_internal::QSimpleResource::setWarningsEnabled(false);
-    const bool writeOK = writeFile(actualName, errorString);
-    qdesigner_internal::QSimpleResource::setWarningsEnabled(warningsEnabled);
-#endif
     m_shouldAutoSave = false;
     if (autoSave)
         return writeOK;
@@ -128,12 +121,7 @@ bool FormWindowFile::setContents(const QByteArray &contents)
         QApplication::restoreOverrideCursor();
     }
 
-#if QT_VERSION >= 0x050000
     const bool success = m_formWindow->setContents(QString::fromUtf8(contents));
-#else
-    m_formWindow->setContents(QString::fromUtf8(contents));
-    const bool success = m_formWindow->mainContainer() != 0;
-#endif
 
     if (hasOverrideCursor)
         QApplication::setOverrideCursor(overrideCursor);
@@ -229,16 +217,14 @@ void FormWindowFile::syncXmlFromFormWindow()
 
 QString FormWindowFile::formWindowContents() const
 {
-#if QT_VERSION >= 0x050000    // TODO: No warnings about spacers here
+    // TODO: No warnings about spacers here
     QTC_ASSERT(m_formWindow, return QString());
     return m_formWindow->contents();
-#else
-    // No warnings about spacers here
-    const qdesigner_internal::FormWindowBase *fw =
-            qobject_cast<const qdesigner_internal::FormWindowBase *>(m_formWindow);
-    QTC_ASSERT(fw, return QString());
-    return fw->fileContents();
-#endif
+}
+
+ResourceHandler *FormWindowFile::resourceHandler() const
+{
+    return m_resourceHandler;
 }
 
 void FormWindowFile::slotFormWindowRemoved(QDesignerFormWindowInterface *w)

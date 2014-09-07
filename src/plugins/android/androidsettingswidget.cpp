@@ -169,8 +169,8 @@ AndroidSettingsWidget::AndroidSettingsWidget(QWidget *parent)
     m_ui->CreateKitCheckBox->setChecked(m_androidConfig.automaticKitCreation());
     m_ui->AVDTableView->setModel(&m_AVDModel);
     m_AVDModel.setAvdList(m_androidConfig.androidVirtualDevices());
-    m_ui->AVDTableView->horizontalHeader()->setResizeMode(QHeaderView::Stretch);
-    m_ui->AVDTableView->horizontalHeader()->setResizeMode(1, QHeaderView::ResizeToContents);
+    m_ui->AVDTableView->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    m_ui->AVDTableView->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
 
     m_ui->downloadAntToolButton->setVisible(!Utils::HostOsInfo::isLinuxHost());
     m_ui->downloadOpenJDKToolButton->setVisible(!Utils::HostOsInfo::isLinuxHost());
@@ -260,7 +260,7 @@ void AndroidSettingsWidget::check(AndroidSettingsWidget::Mode mode)
             m_ndkState = Error;
             m_ndkErrorMessage = tr("\"%1\" does not seem to be an Android NDK top folder.")
                     .arg(m_androidConfig.ndkLocation().toUserOutput());
-        } else if (platformPath.toString().contains(QLatin1String(" "))) {
+        } else if (platformPath.toString().contains(QLatin1Char(' '))) {
             m_ndkState = Error;
             m_ndkErrorMessage = tr("The Android NDK cannot be installed into a path with spaces.");
         } else {

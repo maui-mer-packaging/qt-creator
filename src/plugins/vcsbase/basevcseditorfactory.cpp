@@ -31,12 +31,15 @@
 #include "vcsbaseeditor.h"
 
 #include <texteditor/texteditoractionhandler.h>
-#include <texteditor/texteditorsettings.h>
 
 #include <diffeditor/diffeditorconstants.h>
+#include <extensionsystem/pluginmanager.h>
+#include <utils/qtcassert.h>
 
 #include <QCoreApplication>
 #include <QStringList>
+
+using namespace TextEditor;
 
 /*!
     \class VcsBase::BaseVCSEditorFactory
@@ -48,50 +51,43 @@
 */
 
 namespace VcsBase {
-namespace Internal {
 
-class BaseVcsEditorFactoryPrivate
+VcsEditorFactory::VcsEditorFactory(const VcsBaseEditorParameters *parameters,
+                                   const EditorWidgetCreator &editorWidgetCreator,
+                                   QObject *describeReceiver, const char *describeSlot)
 {
-public:
-    const VcsBaseEditorParameters *m_type;
-    QObject *m_describeReceiver;
-    const char *m_describeSlot;
-};
+    setProperty("VcsEditorFactoryName", QByteArray(parameters->id));
+    setId(parameters->id);
+    setDisplayName(QCoreApplication::translate("VCS", parameters->displayName));
+    if (QLatin1String(parameters->mimeType) != QLatin1String(DiffEditor::Constants::DIFF_EDITOR_MIMETYPE))
+        addMimeType(parameters->mimeType);
 
-} // namespace Internal
+    setEditorActionHandlers(TextEditorActionHandler::None);
+    setDuplicatedSupported(false);
 
-BaseVcsEditorFactory::BaseVcsEditorFactory(const VcsBaseEditorParameters *t,
-                                           QObject *describeReceiver, const char *describeSlot)
-  : d(new Internal::BaseVcsEditorFactoryPrivate)
-{
-    d->m_type = t;
-    d->m_describeReceiver = describeReceiver;
-    d->m_describeSlot = describeSlot;
-    setId(t->id);
-    setDisplayName(QCoreApplication::translate("VCS", t->displayName));
-    if (QLatin1String(t->mimeType) != QLatin1String(DiffEditor::Constants::DIFF_EDITOR_MIMETYPE))
-        addMimeType(t->mimeType);
-    new TextEditor::TextEditorActionHandler(this, t->context);
+    setDocumentCreator([=]() -> BaseTextDocument* {
+        auto document = new BaseTextDocument(parameters->id);
+ //  if (QLatin1String(parameters->mimeType) != QLatin1String(DiffEditor::Constants::DIFF_EDITOR_MIMETYPE))
+        document->setMimeType(QLatin1String(parameters->mimeType));
+        return document;
+    });
+
+    setEditorWidgetCreator([=]() -> BaseTextEditorWidget* {
+        auto widget = qobject_cast<VcsBaseEditorWidget *>(editorWidgetCreator());
+        widget->setDescribeSlot(describeReceiver, describeSlot);
+        widget->setParameters(parameters);
+        return widget;
+    });
+
+    setEditorCreator([]() { return new VcsBaseEditor(); });
 }
 
-BaseVcsEditorFactory::~BaseVcsEditorFactory()
+VcsBaseEditor *VcsEditorFactory::createEditorById(const char *id)
 {
-    delete d;
-}
-
-Core::IEditor *BaseVcsEditorFactory::createEditor()
-{
-    VcsBaseEditorWidget *vcsEditor = createVcsBaseEditor(d->m_type);
-
-    vcsEditor->init();
-    if (d->m_describeReceiver)
-        connect(vcsEditor, SIGNAL(describeRequested(QString,QString)), d->m_describeReceiver, d->m_describeSlot);
-
-    if (!mimeTypes().isEmpty())
-        vcsEditor->textDocument()->setMimeType(mimeTypes().front());
-
-    TextEditor::TextEditorSettings::initializeEditor(vcsEditor);
-    return vcsEditor->editor();
+    auto factory =  ExtensionSystem::PluginManager::getObject<VcsEditorFactory>(
+        [id](QObject *ob) { return ob->property("VcsEditorFactoryName").toByteArray() == id; });
+    QTC_ASSERT(factory, return 0);
+    return qobject_cast<VcsBaseEditor *>(factory->createEditor());
 }
 
 } // namespace VcsBase

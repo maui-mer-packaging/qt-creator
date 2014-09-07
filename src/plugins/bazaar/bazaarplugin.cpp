@@ -59,7 +59,7 @@
 #include <vcsbase/vcsbasesubmiteditor.h>
 #include <vcsbase/vcsbaseconstants.h>
 #include <vcsbase/vcsbaseeditor.h>
-#include <vcsbase/vcsbaseoutputwindow.h>
+#include <vcsbase/vcsoutputwindow.h>
 
 #include <QtPlugin>
 #include <QAction>
@@ -115,19 +115,16 @@ const VcsBaseEditorParameters editorParameters[] = {
     {   LogOutput, // type
         Constants::FILELOG_ID, // id
         Constants::FILELOG_DISPLAY_NAME, // display name
-        Constants::FILELOG, // context
         Constants::LOGAPP}, // mime type
 
     {    AnnotateOutput,
          Constants::ANNOTATELOG_ID,
          Constants::ANNOTATELOG_DISPLAY_NAME,
-         Constants::ANNOTATELOG,
          Constants::ANNOTATEAPP},
 
     {   DiffOutput,
         Constants::DIFFLOG_ID,
         Constants::DIFFLOG_DISPLAY_NAME,
-        Constants::DIFFLOG,
         Constants::DIFFAPP}
 };
 
@@ -135,7 +132,6 @@ const VcsBaseSubmitEditorParameters submitEditorParameters = {
     COMMITMIMETYPE,
     COMMIT_ID,
     COMMIT_DISPLAY_NAME,
-    COMMIT_ID,
     VcsBaseSubmitEditorParameters::DiffFiles
 };
 
@@ -143,8 +139,7 @@ const VcsBaseSubmitEditorParameters submitEditorParameters = {
 BazaarPlugin *BazaarPlugin::m_instance = 0;
 
 BazaarPlugin::BazaarPlugin()
-    : m_optionsPage(0),
-      m_client(0),
+    : m_client(0),
       m_commandLocator(0),
       m_addAction(0),
       m_deleteAction(0),
@@ -166,23 +161,22 @@ bool BazaarPlugin::initialize(const QStringList &arguments, QString *errorMessag
     Q_UNUSED(arguments);
     Q_UNUSED(errorMessage);
 
-    typedef VcsEditorFactory<BazaarEditor> BazaarEditorFactory;
-
     m_client = new BazaarClient(&m_bazaarSettings);
     initializeVcs(new BazaarControl(m_client));
 
-    m_optionsPage = new OptionsPage();
-    addAutoReleasedObject(m_optionsPage);
+    addAutoReleasedObject(new OptionsPage);
     m_bazaarSettings.readSettings(ICore::settings());
 
     connect(m_client, SIGNAL(changed(QVariant)), versionControl(), SLOT(changed(QVariant)));
 
     static const char *describeSlot = SLOT(view(QString,QString));
     const int editorCount = sizeof(editorParameters) / sizeof(VcsBaseEditorParameters);
+    const auto widgetCreator = []() { return new BazaarEditorWidget; };
     for (int i = 0; i < editorCount; i++)
-        addAutoReleasedObject(new BazaarEditorFactory(editorParameters + i, m_client, describeSlot));
+        addAutoReleasedObject(new VcsEditorFactory(editorParameters + i, widgetCreator, m_client, describeSlot));
 
-    addAutoReleasedObject(new VcsSubmitEditorFactory<CommitEditor>(&submitEditorParameters));
+    addAutoReleasedObject(new VcsSubmitEditorFactory(&submitEditorParameters,
+        []() { return new CommitEditor(&submitEditorParameters); }));
 
     auto cloneWizardFactory = new BaseCheckoutWizardFactory;
     cloneWizardFactory->setId(QLatin1String(VcsBase::Constants::VCS_ID_BAZAAR));
@@ -575,13 +569,12 @@ void BazaarPlugin::commit()
 
 void BazaarPlugin::showCommitWidget(const QList<VcsBaseClient::StatusItem> &status)
 {
-    VcsBaseOutputWindow *outputWindow = VcsBaseOutputWindow::instance();
     //Once we receive our data release the connection so it can be reused elsewhere
     disconnect(m_client, SIGNAL(parsedStatus(QList<VcsBaseClient::StatusItem>)),
                this, SLOT(showCommitWidget(QList<VcsBaseClient::StatusItem>)));
 
     if (status.isEmpty()) {
-        outputWindow->appendError(tr("There are no changes to commit."));
+        VcsOutputWindow::appendError(tr("There are no changes to commit."));
         return;
     }
 
@@ -590,20 +583,20 @@ void BazaarPlugin::showCommitWidget(const QList<VcsBaseClient::StatusItem> &stat
     // Keep the file alive, else it removes self and forgets its name
     saver.setAutoRemove(false);
     if (!saver.finalize()) {
-        VcsBaseOutputWindow::instance()->appendError(saver.errorString());
+        VcsOutputWindow::appendError(saver.errorString());
         return;
     }
 
     IEditor *editor = EditorManager::openEditor(saver.fileName(), COMMIT_ID);
     if (!editor) {
-        outputWindow->appendError(tr("Unable to create an editor for the commit."));
+        VcsOutputWindow::appendError(tr("Unable to create an editor for the commit."));
         return;
     }
 
     CommitEditor *commitEditor = qobject_cast<CommitEditor *>(editor);
 
     if (!commitEditor) {
-        outputWindow->appendError(tr("Unable to create a commit editor."));
+        VcsOutputWindow::appendError(tr("Unable to create a commit editor."));
         return;
     }
     setSubmitEditor(commitEditor);
@@ -657,8 +650,7 @@ void BazaarPlugin::testDiffFileResolving_data()
 
 void BazaarPlugin::testDiffFileResolving()
 {
-    BazaarEditor editor(editorParameters + 2, 0);
-    editor.testDiffFileResolving();
+    VcsBaseEditorWidget::testDiffFileResolving(editorParameters[2].id);
 }
 
 void BazaarPlugin::testLogResolving()
@@ -681,8 +673,7 @@ void BazaarPlugin::testLogResolving()
                 "  (gz) Set approved revision and vote \"Approve\" when using lp-propose\n"
                 "   --approve (Jonathan Lange)\n"
                 );
-    BazaarEditor editor(editorParameters, 0);
-    editor.testLogResolving(data, "6572", "6571");
+    VcsBaseEditorWidget::testLogResolving(editorParameters[0].id, data, "6572", "6571");
 }
 #endif
 
@@ -690,7 +681,8 @@ void BazaarPlugin::commitFromEditor()
 {
     // Close the submit editor
     m_submitActionTriggered = true;
-    EditorManager::closeEditor(submitEditor());
+    QTC_ASSERT(submitEditor(), return);
+    EditorManager::closeDocument(submitEditor()->document());
 }
 
 void BazaarPlugin::uncommit()
@@ -782,5 +774,3 @@ void BazaarPlugin::updateActions(VcsBase::VcsBasePlugin::ActionState as)
 
 } // namespace Internal
 } // namespace Bazaar
-
-Q_EXPORT_PLUGIN(Bazaar::Internal::BazaarPlugin)

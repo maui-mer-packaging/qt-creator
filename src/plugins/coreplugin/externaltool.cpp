@@ -128,6 +128,7 @@ ExternalTool &ExternalTool::operator=(const ExternalTool &other)
     m_errorHandling = other.m_errorHandling;
     m_modifiesCurrentDocument = other.m_modifiesCurrentDocument;
     m_fileName = other.m_fileName;
+    m_presetFileName = other.m_presetFileName;
     m_presetTool = other.m_presetTool;
     return *this;
 }
@@ -316,7 +317,7 @@ static void localizedText(const QStringList &locales, QXmlStreamReader *reader, 
         if (*currentLocale < 0 && currentText->isEmpty()) {
             *currentText = QCoreApplication::translate("Core::Internal::ExternalTool",
                                                        reader->readElementText().toUtf8().constData(),
-                                                       "", QCoreApplication::UnicodeUTF8);
+                                                       "");
         } else {
             reader->skipCurrentElement();
         }

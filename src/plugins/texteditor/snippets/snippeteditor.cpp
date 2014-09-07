@@ -31,10 +31,12 @@
 
 #include <texteditor/basetextdocument.h>
 #include <texteditor/texteditorconstants.h>
+#include <texteditor/texteditorsettings.h>
+#include <utils/qtcassert.h>
 
 #include <QFocusEvent>
 
-using namespace TextEditor;
+namespace TextEditor {
 
 /*!
     \class TextEditor::SnippetEditorWidget
@@ -43,25 +45,15 @@ using namespace TextEditor;
     \ingroup Snippets
 */
 
-SnippetEditor::SnippetEditor(SnippetEditorWidget *editor)
-    : BaseTextEditor(editor)
-{
-    setContext(Core::Context(Constants::SNIPPET_EDITOR_ID, Constants::C_TEXTEDITOR));
-}
 
 SnippetEditorWidget::SnippetEditorWidget(QWidget *parent)
-    : BaseTextEditorWidget(new BaseTextDocument, parent)
+    : BaseTextEditorWidget(parent)
 {
-    textDocument()->setId(Constants::SNIPPET_EDITOR_ID);
+    setupFallBackEditor(TextEditor::Constants::SNIPPET_EDITOR_ID);
     setFrameStyle(QFrame::StyledPanel | QFrame::Sunken);
     setHighlightCurrentLine(false);
     setLineNumbersVisible(false);
     setParenthesesMatchingEnabled(true);
-}
-
-void SnippetEditorWidget::setSyntaxHighlighter(TextEditor::SyntaxHighlighter *highlighter)
-{
-    textDocument()->setSyntaxHighlighter(highlighter);
 }
 
 void SnippetEditorWidget::focusOutEvent(QFocusEvent *event)
@@ -73,7 +65,4 @@ void SnippetEditorWidget::focusOutEvent(QFocusEvent *event)
     BaseTextEditorWidget::focusOutEvent(event);
 }
 
-BaseTextEditor *SnippetEditorWidget::createEditor()
-{
-    return new SnippetEditor(this);
-}
+} // namespace

@@ -39,11 +39,11 @@
 #include "checkoutwizard.h"
 
 #include <vcsbase/basevcseditorfactory.h>
-#include <vcsbase/command.h>
+#include <vcsbase/vcscommand.h>
 #include <vcsbase/vcsbaseeditor.h>
 #include <vcsbase/basevcssubmiteditorfactory.h>
 #include <vcsbase/vcsbaseconstants.h>
-#include <vcsbase/vcsbaseoutputwindow.h>
+#include <vcsbase/vcsoutputwindow.h>
 #include <vcsbase/vcsbaseeditorparameterwidget.h>
 
 #include <coreplugin/actionmanager/actioncontainer.h>
@@ -113,7 +113,6 @@ const char CMD_ID_COMMIT_PROJECT[]     = "Subversion.CommitProject";
 const char CMD_ID_DESCRIBE[]           = "Subversion.Describe";
 
 const char SUBVERSION_SUBMIT_MIMETYPE[] = "text/vnd.qtcreator.svn.submit";
-const char SUBVERSIONCOMMITEDITOR[]     = "Subversion Commit Editor";
 const char SUBVERSIONCOMMITEDITOR_ID[]  = "Subversion Commit Editor";
 const char SUBVERSIONCOMMITEDITOR_DISPLAY_NAME[]  = QT_TRANSLATE_NOOP("VCS", "Subversion Commit Editor");
 const char SUBMIT_CURRENT[]             = "Subversion.SubmitCurrentLog";
@@ -124,17 +123,14 @@ const VcsBaseEditorParameters editorParameters[] = {
     LogOutput,
     "Subversion File Log Editor",   // id
     QT_TRANSLATE_NOOP("VCS", "Subversion File Log Editor"),   // display_name
-    "Subversion File Log Editor",   // context
     "text/vnd.qtcreator.svn.log"},
 {    AnnotateOutput,
     "Subversion Annotation Editor",  // id
     QT_TRANSLATE_NOOP("VCS", "Subversion Annotation Editor"),   // display_name
-    "Subversion Annotation Editor",  // context
     "text/vnd.qtcreator.svn.annotation"},
 {   DiffOutput,
     "Subversion Diff Editor",  // id
     QT_TRANSLATE_NOOP("VCS", "Subversion Diff Editor"),   // display_name
-    "Subversion Diff Editor",  // context
     "text/x-patch"}
 };
 
@@ -142,7 +138,7 @@ const VcsBaseEditorParameters editorParameters[] = {
 static const VcsBaseEditorParameters *findType(int ie)
 {
     const EditorContentType et = static_cast<EditorContentType>(ie);
-    return VcsBaseEditorWidget::findType(editorParameters, sizeof(editorParameters)/sizeof(editorParameters[0]), et);
+    return VcsBaseEditor::findType(editorParameters, sizeof(editorParameters)/sizeof(editorParameters[0]), et);
 }
 
 static inline QString debugCodec(const QTextCodec *c)
@@ -241,18 +237,13 @@ const VcsBaseSubmitEditorParameters submitParameters = {
     SUBVERSION_SUBMIT_MIMETYPE,
     SUBVERSIONCOMMITEDITOR_ID,
     SUBVERSIONCOMMITEDITOR_DISPLAY_NAME,
-    SUBVERSIONCOMMITEDITOR,
     VcsBaseSubmitEditorParameters::DiffFiles
 };
 
 bool SubversionPlugin::initialize(const QStringList & /*arguments */, QString *errorMessage)
 {
-    typedef VcsSubmitEditorFactory<SubversionSubmitEditor> SubversionSubmitEditorFactory;
-    typedef VcsEditorFactory<SubversionEditor> SubversionEditorFactory;
     using namespace Constants;
-
     using namespace Core::Constants;
-    using namespace ExtensionSystem;
 
     initializeVcs(new SubversionControl(this));
 
@@ -266,12 +257,14 @@ bool SubversionPlugin::initialize(const QStringList & /*arguments */, QString *e
 
     addAutoReleasedObject(new SettingsPage);
 
-    addAutoReleasedObject(new SubversionSubmitEditorFactory(&submitParameters));
+    addAutoReleasedObject(new VcsSubmitEditorFactory(&submitParameters,
+        []() { return new SubversionSubmitEditor(&submitParameters); }));
 
     static const char *describeSlot = SLOT(describe(QString,QString));
     const int editorCount = sizeof(editorParameters) / sizeof(editorParameters[0]);
+    const auto widgetCreator = []() { return new SubversionEditorWidget; };
     for (int i = 0; i < editorCount; i++)
-        addAutoReleasedObject(new SubversionEditorFactory(editorParameters + i, this, describeSlot));
+        addAutoReleasedObject(new VcsEditorFactory(editorParameters + i, widgetCreator, this, describeSlot));
 
     auto checkoutWizardFactory = new BaseCheckoutWizardFactory;
     checkoutWizardFactory->setId(QLatin1String(VcsBase::Constants::VCS_ID_SUBVERSION));
@@ -445,7 +438,7 @@ bool SubversionPlugin::initialize(const QStringList & /*arguments */, QString *e
     m_commandLocator->appendCommand(command);
 
     // Actions of the submit editor
-    Context svncommitcontext(SUBVERSIONCOMMITEDITOR);
+    Context svncommitcontext(SUBVERSIONCOMMITEDITOR_ID);
 
     m_submitCurrentLogAction = new QAction(VcsBaseSubmitEditor::submitIcon(), tr("Commit"), this);
     command = ActionManager::registerAction(m_submitCurrentLogAction, SUBMIT_CURRENT, svncommitcontext);
@@ -507,9 +500,9 @@ bool SubversionPlugin::submitEditorAboutToClose()
         // get message & commit
         closeEditor = DocumentManager::saveDocument(editorDocument);
         if (closeEditor) {
-            VcsBase::Command *commitCmd = m_client->createCommitCmd(m_commitRepository,
-                                                                    fileList,
-                                                                    m_commitMessageFileName);
+            VcsCommand *commitCmd = m_client->createCommitCmd(m_commitRepository,
+                                                              fileList,
+                                                              m_commitMessageFileName);
             QObject::connect(commitCmd, SIGNAL(success(QVariant)),
                              this, SLOT(cleanCommitMessageFile()));
             commitCmd->execute();
@@ -680,7 +673,7 @@ void SubversionPlugin::startCommit(const QString &workingDir, const QStringList 
     if (raiseSubmitEditor())
         return;
     if (isCommitEditorOpen()) {
-        VcsBaseOutputWindow::instance()->appendWarning(tr("Another commit is currently being executed."));
+        VcsOutputWindow::appendWarning(tr("Another commit is currently being executed."));
         return;
     }
 
@@ -695,7 +688,7 @@ void SubversionPlugin::startCommit(const QString &workingDir, const QStringList 
     // Get list of added/modified/deleted files
     const StatusList statusOutput = parseStatusOutput(response.stdOut);
     if (statusOutput.empty()) {
-        VcsBaseOutputWindow::instance()->appendWarning(tr("There are no modified files."));
+        VcsOutputWindow::appendWarning(tr("There are no modified files."));
         return;
     }
     m_commitRepository = workingDir;
@@ -707,7 +700,7 @@ void SubversionPlugin::startCommit(const QString &workingDir, const QStringList 
     // Create a submit
     saver.write(submitTemplate.toUtf8());
     if (!saver.finalize()) {
-        VcsBaseOutputWindow::instance()->appendError(saver.errorString());
+        VcsOutputWindow::appendError(saver.errorString());
         return;
     }
     m_commitMessageFileName = saver.fileName();
@@ -783,11 +776,10 @@ void SubversionPlugin::svnStatus(const QString &workingDir, const QString &relat
     QStringList args(QLatin1String("status"));
     if (!relativePath.isEmpty())
         args.append(relativePath);
-    VcsBaseOutputWindow *outwin = VcsBaseOutputWindow::instance();
-    outwin->setRepository(workingDir);
+    VcsOutputWindow::setRepository(workingDir);
     runSvn(workingDir, args, m_settings.timeOutMs(),
            ShowStdOutInLogWindow|ShowSuccessMessage);
-    outwin->clearRepository();
+    VcsOutputWindow::clearRepository();
 }
 
 void SubversionPlugin::filelog(const QString &workingDir,
@@ -814,19 +806,19 @@ void SubversionPlugin::filelog(const QString &workingDir,
     // Re-use an existing view if possible to support
     // the common usage pattern of continuously changing and diffing a file
 
-    const QString id = VcsBaseEditorWidget::getTitleId(workingDir, QStringList(file));
-    const QString tag = VcsBaseEditorWidget::editorTag(LogOutput, workingDir,
+    const QString id = VcsBaseEditor::getTitleId(workingDir, QStringList(file));
+    const QString tag = VcsBaseEditor::editorTag(LogOutput, workingDir,
                                                                 QStringList(file));
-    if (IEditor *editor = VcsBaseEditorWidget::locateEditorByTag(tag)) {
+    if (IEditor *editor = VcsBaseEditor::locateEditorByTag(tag)) {
         editor->document()->setContents(response.stdOut.toUtf8());
         EditorManager::activateEditor(editor);
     } else {
         const QString title = QString::fromLatin1("svn log %1").arg(id);
-        const QString source = VcsBaseEditorWidget::getSource(workingDir, file);
+        const QString source = VcsBaseEditor::getSource(workingDir, file);
         IEditor *newEditor = showOutputInEditor(title, response.stdOut, LogOutput, source, /*codec*/0);
-        VcsBaseEditorWidget::tagEditor(newEditor, tag);
+        VcsBaseEditor::tagEditor(newEditor, tag);
         if (enableAnnotationContextMenu)
-            VcsBaseEditorWidget::getVcsBaseEditor(newEditor)->setFileLogAnnotateEnabled(true);
+            VcsBaseEditor::getVcsBaseEditor(newEditor)->setFileLogAnnotateEnabled(true);
     }
 }
 
@@ -869,8 +861,8 @@ void SubversionPlugin::vcsAnnotate(const QString &workingDir, const QString &fil
                                 const QString &revision /* = QString() */,
                                 int lineNumber /* = -1 */)
 {
-    const QString source = VcsBaseEditorWidget::getSource(workingDir, file);
-    QTextCodec *codec = VcsBaseEditorWidget::getCodec(source);
+    const QString source = VcsBaseEditor::getSource(workingDir, file);
+    QTextCodec *codec = VcsBaseEditor::getCodec(source);
 
     QStringList args(QLatin1String("annotate"));
     if (m_settings.boolValue(SubversionSettings::spaceIgnorantAnnotationKey))
@@ -889,20 +881,20 @@ void SubversionPlugin::vcsAnnotate(const QString &workingDir, const QString &fil
     // Re-use an existing view if possible to support
     // the common usage pattern of continuously changing and diffing a file
     if (lineNumber <= 0)
-        lineNumber = VcsBaseEditorWidget::lineNumberOfCurrentEditor(source);
+        lineNumber = VcsBaseEditor::lineNumberOfCurrentEditor(source);
     // Determine id
     const QStringList files = QStringList(file);
-    const QString id = VcsBaseEditorWidget::getTitleId(workingDir, files, revision);
-    const QString tag = VcsBaseEditorWidget::editorTag(AnnotateOutput, workingDir, files);
-    if (IEditor *editor = VcsBaseEditorWidget::locateEditorByTag(tag)) {
+    const QString id = VcsBaseEditor::getTitleId(workingDir, files, revision);
+    const QString tag = VcsBaseEditor::editorTag(AnnotateOutput, workingDir, files);
+    if (IEditor *editor = VcsBaseEditor::locateEditorByTag(tag)) {
         editor->document()->setContents(response.stdOut.toUtf8());
-        VcsBaseEditorWidget::gotoLineOfEditor(editor, lineNumber);
+        VcsBaseEditor::gotoLineOfEditor(editor, lineNumber);
         EditorManager::activateEditor(editor);
     } else {
         const QString title = QString::fromLatin1("svn annotate %1").arg(id);
         IEditor *newEditor = showOutputInEditor(title, response.stdOut, AnnotateOutput, source, codec);
-        VcsBaseEditorWidget::tagEditor(newEditor, tag);
-        VcsBaseEditorWidget::gotoLineOfEditor(newEditor, lineNumber);
+        VcsBaseEditor::tagEditor(newEditor, tag);
+        VcsBaseEditor::gotoLineOfEditor(newEditor, lineNumber);
     }
 }
 
@@ -948,7 +940,7 @@ void SubversionPlugin::describe(const QString &source, const QString &changeNr)
     QTextStream(&diffArg) << (number - 1) << ':' << number;
     args.push_back(diffArg);
 
-    QTextCodec *codec = VcsBaseEditorWidget::getCodec(source);
+    QTextCodec *codec = VcsBaseEditor::getCodec(source);
     const SubversionResponse response =
             runSvn(topLevel, args, m_settings.timeOutMs(),
                    SshPasswordPrompt, codec);
@@ -958,14 +950,14 @@ void SubversionPlugin::describe(const QString &source, const QString &changeNr)
 
     // Re-use an existing view if possible to support
     // the common usage pattern of continuously changing and diffing a file
-    const QString tag = VcsBaseEditorWidget::editorTag(DiffOutput, source, QStringList(), changeNr);
-    if (IEditor *editor = VcsBaseEditorWidget::locateEditorByTag(tag)) {
+    const QString tag = VcsBaseEditor::editorTag(DiffOutput, source, QStringList(), changeNr);
+    if (IEditor *editor = VcsBaseEditor::locateEditorByTag(tag)) {
         editor->document()->setContents(description.toUtf8());
         EditorManager::activateEditor(editor);
     } else {
         const QString title = QString::fromLatin1("svn describe %1#%2").arg(fi.fileName(), changeNr);
         IEditor *newEditor = showOutputInEditor(title, description, DiffOutput, source, codec);
-        VcsBaseEditorWidget::tagEditor(newEditor, tag);
+        VcsBaseEditor::tagEditor(newEditor, tag);
     }
 }
 
@@ -990,7 +982,8 @@ void SubversionPlugin::slotDescribe()
 void SubversionPlugin::submitCurrentLog()
 {
     m_submitActionTriggered = true;
-    EditorManager::closeEditor(submitEditor());
+    QTC_ASSERT(submitEditor(), return);
+    EditorManager::closeDocument(submitEditor()->document());
 }
 
 SubversionResponse
@@ -1016,7 +1009,7 @@ SubversionResponse SubversionPlugin::runSvn(const QString &workingDir,
     SubversionResponse response;
     if (executable.isEmpty()) {
         response.error = true;
-        response.message =tr("No subversion executable specified!");
+        response.message =tr("No subversion executable specified.");
         return response;
     }
 
@@ -1047,7 +1040,7 @@ IEditor *SubversionPlugin::showOutputInEditor(const QString &title, const QStrin
     IEditor *editor = EditorManager::openEditorWithContents(id, &s, output.toUtf8());
     connect(editor, SIGNAL(annotateRevisionRequested(QString,QString,QString,int)),
             this, SLOT(annotateVersion(QString,QString,QString,int)));
-    SubversionEditor *e = qobject_cast<SubversionEditor*>(editor->widget());
+    SubversionEditorWidget *e = qobject_cast<SubversionEditorWidget*>(editor->widget());
     if (!e)
         return 0;
     e->setForceReadOnly(true);
@@ -1282,8 +1275,7 @@ void SubversionPlugin::testDiffFileResolving_data()
 
 void SubversionPlugin::testDiffFileResolving()
 {
-    SubversionEditor editor(editorParameters + 2, 0);
-    editor.testDiffFileResolving();
+    VcsBaseEditorWidget::testDiffFileResolving(editorParameters[2].id);
 }
 
 void SubversionPlugin::testLogResolving()
@@ -1304,13 +1296,10 @@ void SubversionPlugin::testLogResolving()
                 "   expectations, remove XFail.\n"
                 "\n"
                 );
-    SubversionEditor editor(editorParameters, 0);
-    editor.testLogResolving(data, "r1439551", "r1439540");
+    VcsBaseEditorWidget::testLogResolving(editorParameters[0].id, data, "r1439551", "r1439540");
 }
 #endif
 
 } // Internal
 } // Subversion
-
-Q_EXPORT_PLUGIN(Subversion::Internal::SubversionPlugin)
 

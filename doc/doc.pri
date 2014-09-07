@@ -1,15 +1,7 @@
-greaterThan(QT_MAJOR_VERSION, 4) {
-    HELPGENERATOR = $$targetPath($$[QT_INSTALL_BINS]/qhelpgenerator) -platform minimal
-    QDOC_BIN = $$targetPath($$[QT_INSTALL_BINS]/qdoc)
-    QDOC_GLOBAL = QT_INSTALL_DOCS=$$[QT_INSTALL_DOCS/src] QDOC_INDEX_DIR=$$[QT_INSTALL_DOCS]
-    COMPAT =
-} else {
-    HELPGENERATOR = $$targetPath($$[QT_INSTALL_BINS]/qhelpgenerator)
-    QDOC_BIN = $$targetPath($$[QT_INSTALL_BINS]/qdoc3)
-    QDOC_GLOBAL = QDOC_INDEX_DIR=dummy   # this will be ignored. we don't link qt4 docs any more.
-    COMPAT = -qt4
-}
-
+HELPGENERATOR = $$targetPath($$[QT_INSTALL_BINS]/qhelpgenerator) -platform minimal
+QDOC_BIN = $$targetPath($$[QT_INSTALL_BINS]/qdoc)
+QDOC_GLOBAL = QT_INSTALL_DOCS=$$[QT_INSTALL_DOCS/src] QDOC_INDEX_DIR=$$[QT_INSTALL_DOCS]
+COMPAT =
 
 VERSION_TAG = $$replace(QTCREATOR_VERSION, "[-.]", )
 
@@ -62,7 +54,7 @@ DEV_HELP_DEP_FILES = \
     $$PWD/api/creating-plugins.qdoc \
     $$PWD/api/getting-and-building.qdoc \
     $$PWD/api/first-plugin.qdoc \
-    $$PWD/api/plugin-specifications.qdoc \
+    $$PWD/api/plugin-metadata.qdoc \
     $$PWD/api/plugin-lifecycle.qdoc \
     $$PWD/api/pluginmanager.qdoc \
     $$PWD/api/qtcreator-dev$${COMPAT}.qdocconf

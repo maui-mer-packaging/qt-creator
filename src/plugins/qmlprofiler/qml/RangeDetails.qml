@@ -57,21 +57,18 @@ Item {
         onHeightChanged: fitInView();
     }
 
-    //property int eventInfo
-
     ListModel {
         id: eventInfo
     }
 
     function showInfo(eventData) {
         eventInfo.clear();
-        rangeDetails.dialogTitle = eventData[0]["title"];
-        for (var i = 1; i < eventData.length; i++) {
-            for (var k in eventData[i]) {
-                if (eventData[i][k].length > 0) {
-                    eventInfo.append({"content" : k});
-                    eventInfo.append({"content" : eventData[i][k]});
-                }
+        for (var k in eventData) {
+            if (k === "displayName") {
+                dialogTitle = eventData[k];
+            } else if (eventData[k].length > 0) {
+                eventInfo.append({content : k});
+                eventInfo.append({content : eventData[k]});
             }
         }
         rangeDetails.visible = true;
@@ -155,6 +152,7 @@ Item {
         width: parent.width
         color: "white"
         renderType: Text.NativeRendering
+        elide: Text.ElideRight
     }
 
     // Details area
@@ -177,7 +175,8 @@ Item {
             Repeater {
                 model: eventInfo
                 Detail {
-                    text: content
+                    isLabel: index % 2 === 0
+                    text: (content === undefined) ? "" : (isLabel ? (content + ":") : content)
                 }
             }
         }

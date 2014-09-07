@@ -138,7 +138,7 @@ static QString makeAbsolute(const QString &path, const QString &base)
 {
     if (QFileInfo(path).isAbsolute())
         return path;
-    return QString::fromLatin1("%1%2%3").arg(base, QDir::separator(), path);
+    return QString::fromLatin1("%1/%3").arg(base, path);
 }
 
 void PluginDumper::onLoadPluginTypes(const QString &libraryPath, const QString &importPath, const QString &importUri, const QString &importVersion)
@@ -241,7 +241,7 @@ static QString qmldumpErrorMessage(const QString &libraryPath, const QString &er
 static QString qmldumpFailedMessage(const QString &libraryPath, const QString &error)
 {
     QString firstLines =
-            QStringList(error.split(QLatin1Char('\n')).mid(0, 10)).join(QLatin1String("\n"));
+            QStringList(error.split(QLatin1Char('\n')).mid(0, 10)).join(QLatin1Char('\n'));
     return noTypeinfoError(libraryPath) + QLatin1String("\n\n") +
             PluginDumper::tr("Automatic type dump of QML module failed.\n"
                              "First 10 lines or errors:\n"
@@ -324,7 +324,7 @@ void PluginDumper::qmlPluginTypeDumpDone(int exitCode)
     CppQmlTypesLoader::BuiltinObjects objectsList;
     QList<ModuleApiInfo> moduleApis;
     CppQmlTypesLoader::parseQmlTypeDescriptions(output, &objectsList, &moduleApis, &error, &warning,
-                                                QLatin1String("<dump of ") + libraryPath + QLatin1String(">"));
+                                                QLatin1String("<dump of ") + libraryPath + QLatin1Char('>'));
     if (exitCode == 0) {
         if (!error.isEmpty()) {
             libraryInfo.setPluginTypeInfoStatus(LibraryInfo::DumpError,
@@ -412,9 +412,9 @@ void PluginDumper::loadQmltypesFile(const QStringList &qmltypesFilePaths,
     if (errors.isEmpty()) {
         libraryInfo.setPluginTypeInfoStatus(LibraryInfo::TypeInfoFileDone);
     } else {
-        printParseWarnings(libraryPath, errors.join(QLatin1String("\n")));
+        printParseWarnings(libraryPath, errors.join(QLatin1Char('\n')));
         errors.prepend(tr("Errors while reading typeinfo files:"));
-        libraryInfo.setPluginTypeInfoStatus(LibraryInfo::TypeInfoFileError, errors.join(QLatin1String("\n")));
+        libraryInfo.setPluginTypeInfoStatus(LibraryInfo::TypeInfoFileError, errors.join(QLatin1Char('\n')));
     }
 
     if (!warnings.isEmpty())

@@ -113,7 +113,7 @@ void PchManager::setPCHInfo(const QList<ProjectPart::Ptr> &projectParts,
                                 pchInfo->fileName()), Core::MessageManager::Silent);
         }
         if (!msgs.second.isEmpty())
-            emit pchMessage(msgs.second.join(QLatin1String("\n")), Core::MessageManager::Flash);
+            emit pchMessage(msgs.second.join(QLatin1Char('\n')), Core::MessageManager::Flash);
     }
 }
 
@@ -146,8 +146,6 @@ void PchManager::onProjectPartsUpdated(ProjectExplorer::Project *project)
     const QList<ProjectPart::Ptr> projectParts = mmi->projectInfo(
                 cps->project()).projectParts();
     updatePchInfo(cps, projectParts);
-
-    emit pchInfoUpdated();
 }
 
 void PchManager::updatePchInfo(ClangProjectSettings *cps,
@@ -441,7 +439,7 @@ void PchManager::updateActivePchFiles()
 
     QSet<ProjectPart::Ptr> activeParts;
     CppTools::CppModelManagerInterface *mmi = CppTools::CppModelManagerInterface::instance();
-    foreach (const CppTools::CppModelManagerInterface::ProjectInfo &pi, mmi->projectInfos())
+    foreach (const CppTools::ProjectInfo &pi, mmi->projectInfos())
         activeParts.unite(QSet<ProjectPart::Ptr>::fromList(pi.projectParts()));
     QList<ProjectPart::Ptr> partsWithPCHFiles = m_activePchFiles.keys();
     foreach (ProjectPart::Ptr pPart, partsWithPCHFiles)

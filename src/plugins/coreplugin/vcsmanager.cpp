@@ -247,7 +247,7 @@ IVersionControl* VcsManager::findVersionControlForDirectory(const QString &input
     // Make sure we an absolute path:
     QString directory = QDir(inputDirectory).absolutePath();
 #ifdef WITH_TESTS
-    if (directory[0].isLetter() && directory.indexOf(QLatin1String(":") + QLatin1String(TEST_PREFIX)) == 1)
+    if (directory[0].isLetter() && directory.indexOf(QLatin1Char(':') + QLatin1String(TEST_PREFIX)) == 1)
         directory = directory.mid(2);
 #endif
     VcsManagerPrivate::VcsInfo *cachedData = d->findInCache(directory);
@@ -329,8 +329,12 @@ IVersionControl* VcsManager::findVersionControlForDirectory(const QString &input
                                   .arg(versionControl->displayName()),
                                   InfoBarEntry::GlobalSuppressionEnabled);
                 d->m_unconfiguredVcs = versionControl;
-                info.setCustomButtonInfo(Core::ICore::msgShowOptionsDialog(), m_instance,
-                                         SLOT(configureVcs()));
+                info.setCustomButtonInfo(Core::ICore::msgShowOptionsDialog(), []() {
+                    QTC_ASSERT(d->m_unconfiguredVcs, return);
+                    ICore::showOptionsDialog(Id(VcsBase::Constants::VCS_SETTINGS_CATEGORY),
+                                             d->m_unconfiguredVcs->id());
+                 });
+
                 infoBar->addInfo(info);
             }
             return 0;
@@ -475,13 +479,6 @@ void VcsManager::clearVersionControlCache()
     d->clearCache();
     foreach (const QString &repo, repoList)
         emit m_instance->repositoryChanged(repo);
-}
-
-void VcsManager::configureVcs()
-{
-    QTC_ASSERT(d->m_unconfiguredVcs, return);
-    ICore::showOptionsDialog(Id(VcsBase::Constants::VCS_SETTINGS_CATEGORY),
-                             d->m_unconfiguredVcs->id());
 }
 
 void VcsManager::handleConfigurationChanges()
@@ -637,7 +634,7 @@ void CorePlugin::testVcsManager()
     foreach (const QString &result, results) {
         // qDebug() << "Expecting:" << result;
 
-        QStringList split = result.split(QLatin1String(":"));
+        QStringList split = result.split(QLatin1Char(':'));
         QCOMPARE(split.count(), 4);
         QVERIFY(split.at(3) == QLatin1String("*") || split.at(3) == QLatin1String("-"));
 

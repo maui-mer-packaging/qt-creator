@@ -69,29 +69,9 @@
 
 using namespace Core;
 using namespace TextEditor;
+using namespace Utils;
 
 namespace DiffEditor {
-
-//////////////////////
-
-class SideDiffEditor : public BaseTextEditor
-{
-    Q_OBJECT
-public:
-    SideDiffEditor(BaseTextEditorWidget *editorWidget)
-        : BaseTextEditor(editorWidget)
-    {
-        document()->setId("DiffEditor.SideDiffEditor");
-        connect(this, SIGNAL(tooltipRequested(TextEditor::BaseTextEditor*,QPoint,int)),
-                this, SLOT(slotTooltipRequested(TextEditor::BaseTextEditor*,QPoint,int)));
-    }
-
-private slots:
-    void slotTooltipRequested(TextEditor::BaseTextEditor *editor,
-                              const QPoint &globalPoint,
-                              int position);
-
-};
 
 ////////////////////////
 /*
@@ -170,7 +150,7 @@ protected:
         return SelectableTextEditorWidget::extraAreaWidth(markWidthPtr);
     }
     void applyFontSettings();
-    BaseTextEditor *createEditor() { return new SideDiffEditor(this); }
+
     virtual QString lineNumber(int blockNumber) const;
     virtual int lineNumberDigits() const;
     virtual bool selectionVisible(int blockNumber) const;
@@ -210,27 +190,6 @@ private:
     QByteArray m_state;
 //    MultiHighlighter *m_highlighter;
 };
-
-////////////////////////
-
-void SideDiffEditor::slotTooltipRequested(TextEditor::BaseTextEditor *editor,
-                                          const QPoint &globalPoint,
-                                          int position)
-{
-    SideDiffEditorWidget *ew = qobject_cast<SideDiffEditorWidget *>(editorWidget());
-    if (!ew)
-        return;
-
-    QMap<int, DiffFileInfo> fi = ew->fileInfo();
-    QMap<int, DiffFileInfo>::const_iterator it
-            = fi.constFind(ew->document()->findBlock(position).blockNumber());
-    if (it != fi.constEnd()) {
-        Utils::ToolTip::show(globalPoint, Utils::TextContent(it.value().fileName),
-                                         editor->widget());
-    } else {
-        Utils::ToolTip::hide();
-    }
-}
 
 ////////////////////////
 /*
@@ -322,7 +281,7 @@ void MultiHighlighter::highlightBlock(const QString &text)
 ////////////////////////
 
 SideDiffEditorWidget::SideDiffEditorWidget(QWidget *parent)
-    : SelectableTextEditorWidget(parent),
+    : SelectableTextEditorWidget("DiffEditor.SideDiffEditor", parent),
       m_lineNumberDigits(1),
       m_inPaintEvent(false)
 {
@@ -334,6 +293,15 @@ SideDiffEditorWidget::SideDiffEditorWidget(QWidget *parent)
     settings.m_markTextChanges = false;
     settings.m_highlightBlocks = false;
     SelectableTextEditorWidget::setDisplaySettings(settings);
+
+    connect(this, &BaseTextEditorWidget::tooltipRequested, [this](const QPoint &point, int position) {
+        int block = document()->findBlock(position).blockNumber();
+        auto it = m_fileInfo.constFind(block);
+        if (it != m_fileInfo.constEnd())
+            ToolTip::show(point, TextContent(it.value().fileName), this);
+        else
+            ToolTip::hide();
+    });
 
 //    setCodeFoldingSupported(true);
 
@@ -791,9 +759,8 @@ SideBySideDiffEditorWidget::SideBySideDiffEditorWidget(QWidget *parent)
     m_leftEditor = new SideDiffEditorWidget(this);
     m_leftEditor->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_leftEditor->setReadOnly(true);
-    connect(TextEditorSettings::instance(),
-            SIGNAL(displaySettingsChanged(TextEditor::DisplaySettings)),
-            m_leftEditor, SLOT(setDisplaySettings(TextEditor::DisplaySettings)));
+    connect(TextEditorSettings::instance(), &TextEditorSettings::displaySettingsChanged,
+            m_leftEditor, &SideDiffEditorWidget::setDisplaySettings);
     m_leftEditor->setDisplaySettings(TextEditorSettings::displaySettings());
     m_leftEditor->setCodeStyle(TextEditorSettings::codeStyle());
     connect(m_leftEditor, SIGNAL(jumpToOriginalFileRequested(int,int,int)),
@@ -804,9 +771,8 @@ SideBySideDiffEditorWidget::SideBySideDiffEditorWidget(QWidget *parent)
 
     m_rightEditor = new SideDiffEditorWidget(this);
     m_rightEditor->setReadOnly(true);
-    connect(TextEditorSettings::instance(),
-            SIGNAL(displaySettingsChanged(TextEditor::DisplaySettings)),
-            m_rightEditor, SLOT(setDisplaySettings(TextEditor::DisplaySettings)));
+    connect(TextEditorSettings::instance(), &TextEditorSettings::displaySettingsChanged,
+            m_rightEditor, &SideDiffEditorWidget::setDisplaySettings);
     m_rightEditor->setDisplaySettings(TextEditorSettings::displaySettings());
     m_rightEditor->setCodeStyle(TextEditorSettings::codeStyle());
     connect(m_rightEditor, SIGNAL(jumpToOriginalFileRequested(int,int,int)),

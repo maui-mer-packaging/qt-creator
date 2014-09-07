@@ -38,26 +38,20 @@
 #include <coreplugin/editormanager/editormanager.h>
 #include <cpptools/cppmodelmanagerinterface.h>
 #include <cpptools/cpptoolsreuse.h>
-#include <extensionsystem/pluginmanager.h>
+#include <cpptools/cppworkingcopy.h>
 #include <projectexplorer/project.h>
 #include <projectexplorer/projectexplorer.h>
 #include <texteditor/basetextdocument.h>
-#include <utils/algorithm.h>
 
+#include <extensionsystem/pluginmanager.h>
 #include <cplusplus/CppDocument.h>
 #include <cplusplus/TranslationUnit.h>
+#include <utils/algorithm.h>
 
 #include <QApplication>
 #include <QDebug>
 #include <QTextDocument>
 #include <QtTest>
-
-#if  QT_VERSION >= 0x050000
-#define MSKIP_SINGLE(x) QSKIP(x)
-#else
-#include <QtTest/qtestkeyboard.h>
-#define MSKIP_SINGLE(x) QSKIP(x, SkipSingle)
-#endif
 
 /*!
     Tests for executing "test actions" for
@@ -78,14 +72,15 @@
 
 using namespace Core;
 using namespace CPlusPlus;
-using namespace CppEditor;
-using namespace CppEditor::Internal;
 using namespace CppTools;
 using namespace TextEditor;
 
+namespace CppEditor {
+namespace Internal {
+
 namespace {
 
-class TestActionsTestCase : public CppEditor::Internal::Tests::TestCase
+class TestActionsTestCase : public Tests::TestCase
 {
 public:
     class AbstractAction
@@ -119,7 +114,7 @@ private:
     /// Move word camel case wise from current cursor position until given token (not included)
     /// and execute the tokenActions for each new position.
     static void moveWordCamelCaseToToken(TranslationUnit *translationUnit, const Token &token,
-                                         CPPEditor *editor, const Actions &tokenActions);
+                                         CppEditor *editor, const Actions &tokenActions);
 
     static void undoAllChangesAndCloseAllEditors();
 
@@ -142,19 +137,19 @@ Actions singleAction(const ActionPointer &action)
 }
 
 TestActionsTestCase::TestActionsTestCase(const Actions &tokenActions, const Actions &fileActions)
-    : CppEditor::Internal::Tests::TestCase(/*runGarbageCollector=*/false)
+    : Tests::TestCase(/*runGarbageCollector=*/false)
 {
     QVERIFY(succeededSoFar());
 
     // Collect files to process
     QStringList filesToOpen;
     QList<QPointer<ProjectExplorer::Project> > projects;
-    const QList<CppModelManagerInterface::ProjectInfo> projectInfos
+    const QList<ProjectInfo> projectInfos
             = m_modelManager->projectInfos();
     if (projectInfos.isEmpty())
-        MSKIP_SINGLE("No project(s) loaded. Test operates only on loaded projects.");
+        QSKIP("No project(s) loaded. Test operates only on loaded projects.");
 
-    foreach (const CppModelManagerInterface::ProjectInfo &info, projectInfos) {
+    foreach (const ProjectInfo &info, projectInfos) {
         QPointer<ProjectExplorer::Project> project = info.project();
         if (!projects.contains(project))
             projects << project;
@@ -186,7 +181,7 @@ TestActionsTestCase::TestActionsTestCase(const Actions &tokenActions, const Acti
 
         // Open editor
         QCOMPARE(DocumentModel::openedDocuments().size(), 0);
-        CPPEditor *editor;
+        CppEditor *editor;
         CppEditorWidget *editorWidget;
         QVERIFY(openCppEditor(filePath, &editor, &editorWidget));
 
@@ -286,7 +281,7 @@ void TestActionsTestCase::executeActionsOnEditorWidget(CppEditorWidget *editorWi
 
 void TestActionsTestCase::moveWordCamelCaseToToken(TranslationUnit *translationUnit,
                                                    const Token &token,
-                                                   CPPEditor *editor,
+                                                   CppEditor *editor,
                                                    const Actions &tokenActions)
 {
     QVERIFY(translationUnit);
@@ -372,7 +367,7 @@ void SwitchDeclarationDefinitionTokenAction::run(CppEditorWidget *)
     IEditor *editorBefore = EditorManager::currentEditor();
     const int originalLine = editorBefore->currentLine();
     const int originalColumn = editorBefore->currentColumn();
-    CppEditor::Internal::CppEditorPlugin::instance()->switchDeclarationDefinition();
+    CppEditorPlugin::instance()->switchDeclarationDefinition();
     QApplication::processEvents();
 
     // Go back
@@ -393,7 +388,7 @@ public:
 
 void FindUsagesTokenAction::run(CppEditorWidget *)
 {
-    CppEditor::Internal::CppEditorPlugin::instance()->findUsages();
+    CppEditorPlugin::instance()->findUsages();
     QApplication::processEvents();
 }
 
@@ -406,7 +401,7 @@ public:
 
 void RenameSymbolUnderCursorTokenAction::run(CppEditorWidget *)
 {
-    CppEditor::Internal::CppEditorPlugin::instance()->renameSymbolUnderCursor();
+    CppEditorPlugin::instance()->renameSymbolUnderCursor();
     QApplication::processEvents();
 }
 
@@ -419,7 +414,7 @@ public:
 
 void OpenTypeHierarchyTokenAction::run(CppEditorWidget *)
 {
-    CppEditor::Internal::CppEditorPlugin::instance()->openTypeHierarchy();
+    CppEditorPlugin::instance()->openTypeHierarchy();
     QApplication::processEvents();
 }
 
@@ -473,7 +468,7 @@ void RunAllQuickFixesTokenAction::run(CppEditorWidget *editorWidget)
         return;
 
     foreach (CppQuickFixFactory *quickFixFactory, quickFixFactories) {
-        TextEditor::QuickFixOperations operations;
+        QuickFixOperations operations;
         // Some Quick Fixes pop up a dialog and are therefore inappropriate for this test.
         // Where possible, use a guiless version of the factory.
         if (qobject_cast<InsertVirtualMethods *>(quickFixFactory)) {
@@ -566,3 +561,6 @@ void CppEditorPlugin::test_moveTokenWiseThroughEveryFileAndTriggerQuickFixes()
 {
     TestActionsTestCase(singleAction(ActionPointer(new RunAllQuickFixesTokenAction)));
 }
+
+} // namespace Internal
+} // namespace CppEditor

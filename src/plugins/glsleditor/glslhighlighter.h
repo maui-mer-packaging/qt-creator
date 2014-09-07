@@ -26,17 +26,16 @@
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ****************************************************************************/
+
 #ifndef GLSLHIGHLIGHTER_H
 #define GLSLHIGHLIGHTER_H
 
 #include <texteditor/syntaxhighlighter.h>
 
-namespace GLSLEditor {
+namespace GlslEditor {
 namespace Internal {
 
-class GlslEditorWidget;
-
-class Highlighter : public TextEditor::SyntaxHighlighter
+class GlslHighlighter : public TextEditor::SyntaxHighlighter
 {
     Q_OBJECT
 
@@ -57,20 +56,15 @@ public:
         NumGLSLFormats
     };
 
-    explicit Highlighter(QTextDocument *parent = 0);
-    explicit Highlighter(TextEditor::BaseTextDocument *parent);
-    virtual ~Highlighter();
+    GlslHighlighter();
 
 protected:
     void highlightBlock(const QString &text);
     void highlightLine(const QString &text, int position, int length, const QTextCharFormat &format);
     bool isPPKeyword(const QStringRef &text) const;
-
-private:
-    void init();
 };
 
 } // namespace Internal
-} // namespace GLSLEditor
+} // namespace GlslEditor
 
 #endif // GLSLHIGHLIGHTER_H

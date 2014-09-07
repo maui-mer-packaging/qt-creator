@@ -82,9 +82,7 @@ private:
 class AndroidManifestTextEditorWidget : public TextEditor::BaseTextEditorWidget
 {
 public:
-    AndroidManifestTextEditorWidget(AndroidManifestEditorWidget *parent = 0);
-protected:
-    AndroidManifestEditorWidget *m_parent;
+    explicit AndroidManifestTextEditorWidget(AndroidManifestEditorWidget *parent);
 };
 
 class AndroidManifestEditorWidget : public QScrollArea
@@ -122,13 +120,12 @@ private slots:
     void setLDPIIcon();
     void setMDPIIcon();
     void setHDPIIcon();
-    void defaultPermissionCheckBoxClicked();
+    void defaultPermissionOrFeatureCheckBoxClicked();
     void addPermission();
     void removePermission();
     void updateAddRemovePermissionButtons();
     void setAppName();
     void setPackageName();
-    void gotoError();
     void updateInfoBar();
     void updateSdkVersions();
     void startParseCheck();
@@ -185,6 +182,7 @@ private:
 
     // Permissions
     QCheckBox *m_defaultPermissonsCheckBox;
+    QCheckBox *m_defaultFeaturesCheckBox;
     PermissionsModel *m_permissionsModel;
     QListView *m_permissionsListView;
     QPushButton *m_addPermissionButton;
