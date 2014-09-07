@@ -9,7 +9,7 @@ Name:       qt-creator
 # << macros
 
 Summary:    Cross-platform IDE for Qt
-Version:    3.1.2
+Version:    3.2.0
 Release:    1
 Group:      Development/Tools
 License:    LGPLv2 with exceptions
